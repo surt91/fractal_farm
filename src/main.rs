@@ -108,8 +108,7 @@ fn random() -> Template {
                                      .gamma(&None)
                                      .build(&fractal_type);
 
-    let (finished, description, json)
-        = fractal::fractal::render_wrapper(&mut fractal, filename.to_str().unwrap(), &dim, false);
+    let json = fractal::fractal::render_draft(&mut fractal, filename.to_str().unwrap(), &dim);
 
     let mut file = fs::File::create(json_path).unwrap();
     write!(&mut file, "{}", json).unwrap();
@@ -118,9 +117,7 @@ fn random() -> Template {
 
     let mut context: HashMap<&str, &str> = HashMap::new();
     context.insert("path", filename.to_str().unwrap());
-    context.insert("description", &description);
     context.insert("json", &json);
-    context.insert("finished", if finished {"good"} else {"bad"});
     context.insert("seed", seed_str);
 
     Template::render("random", &context)

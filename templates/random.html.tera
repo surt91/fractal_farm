@@ -3,9 +3,6 @@
 
 {% block content %}
     <p>
-        {{ description }} (probably {{ finished }})
-    </p>
-    <p>
         Seed: {{ seed }}
     </p>
     <div class="image-holder">
