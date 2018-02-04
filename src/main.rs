@@ -187,16 +187,28 @@ fn grade(conn: DbConn, user_input: Form<NewFractal>) -> Redirect {
 
 #[derive(FromForm)]
 struct DuelResult {
-    id: i64
+    winner: i64,
+    loser: i64
 }
 
-#[post("/duelWin", data = "<winner>")]
-fn duel_win(conn: DbConn, winner: Form<DuelResult>) -> Redirect {
+#[post("/duelWin", data = "<result>")]
+fn duel_win(conn: DbConn, result: Form<DuelResult>) -> Redirect {
     use schema::fractals::dsl::*;
 
-    let winner = winner.get().id;
+    let winner = result.get().winner;
+    let loser = result.get().loser;
 
     // TODO maybe use some elo rating instead
+
+    diesel::update(fractals.find(loser))
+        .set(trials.eq(trials + 1))
+        .execute(&*conn)
+        .expect("Error saving new entry");
+
+    diesel::update(fractals.find(winner))
+        .set(trials.eq(trials + 1))
+        .execute(&*conn)
+        .expect("Error saving new entry");
 
     diesel::update(fractals.find(winner))
         .set(wins.eq(wins + 1))

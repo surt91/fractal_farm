@@ -4,7 +4,7 @@
 {% block content %}
     {% for j in pngs %}
         <div>
-            <p>{{loop.index}}. Score: {{ j.score }}, Wins: {{ j.wins }}</p>
+            <p>{{loop.index}}. Score: {{ j.score }}, Wins/Duels: {{ j.wins }}/{{ j.trials }}</p>
             <div class="image-holder">
                 <a href="/render/{{ j.id }}/1024/1024">
                     <img src="/render/{{ j.id }}/512/512">

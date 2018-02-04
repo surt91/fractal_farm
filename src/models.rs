@@ -7,6 +7,7 @@ pub struct Fractal {
     pub json: String,
     pub score: Option<i64>,
     pub wins: i64,
+    pub trials: i64,
 }
 
 #[derive(Insertable, FromForm, Debug)]

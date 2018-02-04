@@ -5,5 +5,6 @@ table! {
         json -> Text,
         score -> Nullable<BigInt>,
         wins -> BigInt,
+        trials -> BigInt,
     }
 }
