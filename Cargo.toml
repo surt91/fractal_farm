@@ -8,3 +8,7 @@ a_fractal_a_day = { git = "https://github.com/surt91/AFractalADay" }
 
 rocket = "0.3.6"
 rocket_codegen = "0.3.6"
+rocket_contrib = { version = "0.3.6", features = ["tera_templates"] }
+
+rand = "*"
+time = "*"

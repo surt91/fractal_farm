@@ -1,3 +1,6 @@
+Cargo.lock
+
+fractals/
 
 /target/
 **/*.rs.bk
