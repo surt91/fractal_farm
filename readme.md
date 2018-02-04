@@ -14,3 +14,13 @@ This should gather data to improve fractals via some optimization method.
 * [ ]  json could be directly editable
 * [ ]  option to download a high resolution version
 * [ ]  better html/css suited for mobile
+
+
+## Setup the Database
+
+```bash
+export DATABASE_URL=sqlite:///foo.db
+cargo install diesel_cli
+diesel setup
+diesel migration run
+```

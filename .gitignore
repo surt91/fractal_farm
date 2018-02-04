@@ -1,5 +1,6 @@
 Cargo.lock
 
+db.sqlite
 fractals/
 
 /target/

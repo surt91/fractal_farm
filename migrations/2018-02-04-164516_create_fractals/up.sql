@@ -1,0 +1,6 @@
+CREATE TABLE fractals (
+  id INTEGER PRIMARY KEY NOT NULL,
+  created_time INTEGER NOT NULL,
+  json TEXT NOT NULL,
+  score INTEGER
+)

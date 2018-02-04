@@ -10,13 +10,35 @@ use std::path::{Path, PathBuf};
 
 extern crate rand;
 
+extern crate dotenv;
+use dotenv::dotenv;
+use std::env;
+
 extern crate a_fractal_a_day;
 use a_fractal_a_day as fractal;
 
 extern crate rocket;
 use rocket::response::NamedFile;
 extern crate rocket_contrib;
-use rocket_contrib::Template;
+use rocket_contrib::{Json,Template};
+
+#[macro_use] extern crate diesel;
+use diesel::prelude::*;
+extern crate r2d2_diesel;
+extern crate r2d2;
+
+#[macro_use]
+extern crate serde_derive;
+
+extern crate serde;
+extern crate serde_json;
+
+pub mod schema;
+pub mod models;
+
+mod db;
+
+use db::DbConn;
 
 #[get("/")]
 fn index() -> &'static str {
@@ -69,14 +91,29 @@ fn random() -> Template {
     Template::render("random", &context)
 }
 
+#[get("/list")]
+fn list(conn: DbConn) -> QueryResult<Json<Vec<models::Fractal>>> {
+// fn list(conn: DbConn) {
+    use schema::fractals::dsl::*;
+    use schema::fractals;
+    use models::Fractal;
+
+    fractals.order(fractals::id.desc())
+        .load::<Fractal>(&*conn)
+        .map(|x| Json(x))
+}
+
 #[get("/<file..>")]
 fn files(file: PathBuf) -> Option<NamedFile> {
     NamedFile::open(Path::new(".").join(file)).ok()
 }
 
 fn main() {
+    dotenv().ok();
+
     rocket::ignite()
-           .mount("/", routes![index, random, files])
+           .manage(db::init_pool())
+           .mount("/", routes![index, random, files, list])
            .attach(Template::fairing())
            .launch();
 }
