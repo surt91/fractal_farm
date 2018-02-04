@@ -228,7 +228,7 @@ fn top(conn: DbConn) -> Template {
     use models::Fractal;
     use schema::fractals::dsl::*;
 
-    let pngs: Vec<Fractal> = fractals.order(fractals::score.desc())
+    let pngs: Vec<Fractal> = fractals.order(fractals::wins.desc())
         .limit(10)
         .load::<Fractal>(&*conn)
         .unwrap();
