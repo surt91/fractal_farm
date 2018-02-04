@@ -15,6 +15,13 @@
         <div class="image-holder">
             <img src="{{ path | safe }}">
         </div>
+
+        <form action="/grade" method="post">
+            <input type="range" name="score" value="20" min="1" max="100">
+            <input type="text" name="json" hidden readonly value="{{ json }}">
+            <input type="submit" value="Submit">
+        </form>
+
         <pre class="code">{{ json | safe }}</pre>
     </body>
 </html>

@@ -1,4 +1,5 @@
 #![feature(plugin)]
+#![feature(custom_derive)]
 #![plugin(rocket_codegen)]
 
 use std::collections::HashMap;
@@ -12,13 +13,14 @@ extern crate rand;
 
 extern crate dotenv;
 use dotenv::dotenv;
-use std::env;
 
 extern crate a_fractal_a_day;
 use a_fractal_a_day as fractal;
 
 extern crate rocket;
-use rocket::response::NamedFile;
+use rocket::response::{NamedFile, Redirect};
+use rocket::request::Form;
+
 extern crate rocket_contrib;
 use rocket_contrib::{Json,Template};
 
@@ -93,7 +95,6 @@ fn random() -> Template {
 
 #[get("/list")]
 fn list(conn: DbConn) -> QueryResult<Json<Vec<models::Fractal>>> {
-// fn list(conn: DbConn) {
     use schema::fractals::dsl::*;
     use schema::fractals;
     use models::Fractal;
@@ -101,6 +102,21 @@ fn list(conn: DbConn) -> QueryResult<Json<Vec<models::Fractal>>> {
     fractals.order(fractals::id.desc())
         .load::<Fractal>(&*conn)
         .map(|x| Json(x))
+}
+
+use models::NewFractal;
+#[post("/grade", data = "<user_input>")]
+fn grade(conn: DbConn, user_input: Form<NewFractal>) -> Redirect {
+    use schema::fractals;
+
+    println!("{:?}", user_input.get());
+
+    diesel::insert_into(fractals::table)
+        .values(user_input.get())
+        .execute(&*conn)
+        .expect("Error saving new entry");
+
+    Redirect::to("/random")
 }
 
 #[get("/<file..>")]
@@ -113,7 +129,7 @@ fn main() {
 
     rocket::ignite()
            .manage(db::init_pool())
-           .mount("/", routes![index, random, files, list])
+           .mount("/", routes![index, random, files, list, grade])
            .attach(Template::fairing())
            .launch();
 }
