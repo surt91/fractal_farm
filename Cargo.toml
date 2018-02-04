@@ -1,0 +1,10 @@
+[package]
+name = "fractal_farm"
+version = "0.1.0"
+authors = ["Hendrik Schawe <surt91@gmail.com>"]
+
+[dependencies]
+a_fractal_a_day = { git = "https://github.com/surt91/AFractalADay" }
+
+rocket = "0.3.6"
+rocket_codegen = "0.3.6"
