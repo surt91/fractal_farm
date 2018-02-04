@@ -6,7 +6,9 @@
         <div>
             <p>{{loop.index}}</p>
             <div class="image-holder">
-                <img src="{{ j.0 | safe }}">
+                <a href="/render/{{ j.id }}/1024/1024">
+                    <img src="/render/{{ j.id }}/512/512">
+                </a>
             </div>
         </div>
     {% endfor %}

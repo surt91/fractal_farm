@@ -46,13 +46,8 @@ use db::DbConn;
 fn sha2(input: &str) -> String {
     use sha2::{Sha256, Digest};
 
-    // create a Sha256 object
     let mut hasher = Sha256::default();
-
-    // write input message
     hasher.input(input.as_bytes());
-
-    // read hash digest and consume hasher
     let output = hasher.result();
 
     format!("{:X}", output)
@@ -67,11 +62,8 @@ fn basename2path(name: &str) -> PathBuf {
     filename
 }
 
-fn json2png(json: &str) -> PathBuf {
-
-    // TODO cache with sha256 of json
-    // use that hash also as filename
-    let filename = sha2(json);
+fn json2png(json: &str, dim: (u32, u32)) -> PathBuf {
+    let filename = format!("{}x{}_{}", dim.0, dim.1, sha2(json));
     let path = basename2path(&filename);
 
     if path.exists() {
@@ -80,10 +72,6 @@ fn json2png(json: &str) -> PathBuf {
 
     let fractal_type = fractal::FractalType::LoadJson(json.to_owned());
 
-    let size = 512;
-    let dim = (size, size);
-
-    // hacky do while loop
     let mut fractal = fractal::fractal::FractalBuilder::new()
                               .build(&fractal_type);
 
@@ -124,9 +112,6 @@ fn random() -> Template {
         = fractal::fractal::render_wrapper(&mut fractal, filename.to_str().unwrap(), &dim, false);
 
     let mut file = fs::File::create(json_path).unwrap();
-    let json = json.replace("\\n", "\n");
-    let json = json.replace("\\\"", "\"");
-    let json = json.trim_matches('\"');
     write!(&mut file, "{}", json).unwrap();
 
     let seed_str = &format!("{}", seed);
@@ -167,29 +152,40 @@ fn grade(conn: DbConn, user_input: Form<NewFractal>) -> Redirect {
     Redirect::to("/random")
 }
 
+#[get("/render/<id>/<width>/<height>")]
+fn render(conn: DbConn, id: i64, width: u32, height: u32) -> Redirect {
+    use models::Fractal;
+    use schema::fractals;
+    // use schema::fractals::dsl::*;
+
+    let f: Fractal = fractals::table.find(id)
+        .first::<Fractal>(&*conn)
+        .unwrap();
+
+    let dim = (width, height);
+    let path = json2png(&f.json, dim);
+    let path = path.to_str().unwrap();
+    Redirect::to(&format!("/{}", path))
+}
+
 #[get("/top")]
 fn top(conn: DbConn) -> Template {
     use schema::fractals;
     use models::Fractal;
     use schema::fractals::dsl::*;
 
-    let pngs: Vec<(String, Fractal)> = fractals.order(fractals::score.desc())
+    let pngs: Vec<Fractal> = fractals.order(fractals::score.desc())
         .limit(10)
         .load::<Fractal>(&*conn)
-        .map(
-            |x| x.iter().map(
-                |&ref j| (json2png(&j.json).to_str().unwrap().to_owned(), j.clone())
-            ).collect()
-        )
         .unwrap();
 
-    let mut context: HashMap<&str, &Vec<(String, Fractal)>> = HashMap::new();
+    let mut context: HashMap<&str, &Vec<Fractal>> = HashMap::new();
     context.insert("pngs", &pngs);
 
     Template::render("top", &context)
 }
 
-#[get("/<file..>")]
+#[get("/<file..>", rank = 2)]
 fn files(file: PathBuf) -> Option<NamedFile> {
     NamedFile::open(Path::new(".").join(file)).ok()
 }
@@ -199,7 +195,17 @@ fn main() {
 
     rocket::ignite()
            .manage(db::init_pool())
-           .mount("/", routes![index, random, files, list, grade, top])
+           .mount("/",
+                routes![
+                    index,
+                    random,
+                    files,
+                    list,
+                    grade,
+                    top,
+                    render
+                ]
+            )
            .attach(Template::fairing())
            .launch();
 }
