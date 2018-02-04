@@ -6,7 +6,8 @@
 a,
 a:focus,
 a:hover {
-  color: #fff;
+  color: #e83;
+  font-weight: bold;
 }
 
 /* Custom default button */
