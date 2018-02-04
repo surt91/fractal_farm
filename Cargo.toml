@@ -21,3 +21,4 @@ serde_json = "*"
 
 rand = "*"
 time = "*"
+sha2 = "0.7.0"

@@ -1,6 +1,6 @@
 use super::schema::fractals;
 
-#[derive(Queryable, Serialize, Debug)]
+#[derive(Queryable, Serialize, Debug, Clone)]
 pub struct Fractal {
     pub id: i64,
     pub created_time: i64,

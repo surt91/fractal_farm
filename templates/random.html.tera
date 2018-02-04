@@ -1,27 +1,22 @@
-<!DOCTYPE html>
-<html>
-    <head>
-        <meta charset="utf-8">
-        <link rel='stylesheet' type='text/css' href="static/style.css">
-        <title></title>
-    </head>
-    <body>
-        <p>
-            {{ description }} (probably {{ finished }})
-        </p>
-        <p>
-            Seed: {{ seed }}
-        </p>
-        <div class="image-holder">
-            <img src="{{ path | safe }}">
-        </div>
+{% extends "base" %}
+{% block title %}Random Fractal{% endblock title %}
 
-        <form action="/grade" method="post">
-            <input type="range" name="score" value="20" min="1" max="100">
-            <input type="text" name="json" hidden readonly value="{{ json }}">
-            <input type="submit" value="Submit">
-        </form>
+{% block content %}
+    <p>
+        {{ description }} (probably {{ finished }})
+    </p>
+    <p>
+        Seed: {{ seed }}
+    </p>
+    <div class="image-holder">
+        <img src="{{ path | safe }}">
+    </div>
 
-        <pre class="code">{{ json | safe }}</pre>
-    </body>
-</html>
+    <form action="/grade" method="post">
+        <input type="range" name="score" value="20" min="1" max="100">
+        <input type="text" name="json" hidden readonly value="{{ json }}">
+        <input type="submit" value="Submit">
+    </form>
+
+    <pre class="code">{{ json | safe }}</pre>
+{% endblock content %}

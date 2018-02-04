@@ -1,0 +1,13 @@
+{% extends "base" %}
+{% block title %}Top 10{% endblock title %}
+
+{% block content %}
+    {% for j in pngs %}
+        <div>
+            <p>{{loop.index}}</p>
+            <div class="image-holder">
+                <img src="{{ j.0 | safe }}">
+            </div>
+        </div>
+    {% endfor %}
+{% endblock content %}
