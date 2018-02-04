@@ -16,9 +16,9 @@
                 <div class="inner">
                     <h3 class="masthead-brand">Fractal Farm</h3>
                     <nav class="nav nav-masthead justify-content-center">
-                        <a class="nav-link" href="/random">Rate</a>
-                        <a class="nav-link" href="/duel">Duel</a>
-                        <a class="nav-link" href="/top">Top 10</a>
+                        <a class="nav-link" href="/random">Erstellen</a>
+                        <a class="nav-link" href="/duel">Vergleichen</a>
+                        <a class="nav-link" href="/top">Bestenliste</a>
                     </nav>
                 </div>
             </header>
