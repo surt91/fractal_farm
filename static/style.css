@@ -8,5 +8,15 @@ code {
 }
 
 img {
-    max-width: 100%
+    max-width: 100%;
+    padding: 0;
+}
+
+.img-button {
+    margin: 0;
+    padding: 0;
+    border-width: 2;
+    border-style: solid;
+    border-color: #222;
+    cursor: pointer;
 }

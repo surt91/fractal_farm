@@ -123,6 +123,42 @@ fn random() -> Template {
     Template::render("random", &context)
 }
 
+#[get("/duel")]
+fn duel(conn: DbConn) -> Template {
+    use schema::fractals::dsl::*;
+    use schema::fractals;
+    use models::Fractal;
+    use diesel::dsl::sql;
+    // diesel::dsl::sql::<Vec<i64>>("SELECT * FROM table ORDER BY RANDOM() LIMIT 2 WHERE score > 50")
+    //     .get_result(&*conn)
+    //     .expect("Error executing raw SQL");
+
+    let candidates = fractals.filter(fractals::score.gt(50))
+        .limit(2)
+        .order(sql::<i64>("RANDOM()"))
+        .load::<Fractal>(&*conn)
+        .expect("Error getting two random fractals");
+
+    let c1 = &candidates[0];
+    let c2 = &candidates[1];
+
+    let id1 = format!("{}", c1.id);
+    let id2 = format!("{}", c2.id);
+
+    let dim = (512, 512);
+
+    let path1 = json2png(&c1.json, dim);
+    let path2 = json2png(&c2.json, dim);
+
+    let mut context: HashMap<&str, &str> = HashMap::new();
+    context.insert("id1", &id1);
+    context.insert("id2", &id2);
+    context.insert("path1", path1.to_str().unwrap());
+    context.insert("path2", path2.to_str().unwrap());
+
+    Template::render("duel", &context)
+}
+
 #[get("/list")]
 fn list(conn: DbConn) -> QueryResult<Json<Vec<models::Fractal>>> {
     use schema::fractals::dsl::*;
@@ -147,6 +183,27 @@ fn grade(conn: DbConn, user_input: Form<NewFractal>) -> Redirect {
         .expect("Error saving new entry");
 
     Redirect::to("/random")
+}
+
+#[derive(FromForm)]
+struct DuelResult {
+    id: i64
+}
+
+#[post("/duelWin", data = "<winner>")]
+fn duel_win(conn: DbConn, winner: Form<DuelResult>) -> Redirect {
+    use schema::fractals::dsl::*;
+
+    let winner = winner.get().id;
+
+    // TODO maybe use some elo rating instead
+
+    diesel::update(fractals.find(winner))
+        .set(wins.eq(wins + 1))
+        .execute(&*conn)
+        .expect("Error saving new entry");
+
+    Redirect::to("/duel")
 }
 
 #[get("/render/<id>/<width>/<height>")]
@@ -200,7 +257,9 @@ fn main() {
                     list,
                     grade,
                     top,
-                    render
+                    render,
+                    duel,
+                    duel_win
                 ]
             )
            .attach(Template::fairing())

@@ -1,0 +1,2 @@
+ALTER TABLE fractals ADD COLUMN wins INTEGER NOT NULL DEFAULT 0;
+UPDATE fractals SET wins=0;
