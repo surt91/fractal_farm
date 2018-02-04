@@ -6,3 +6,7 @@ body {
 code {
     font-family: monospace;
 }
+
+img {
+    max-width: 100%
+}

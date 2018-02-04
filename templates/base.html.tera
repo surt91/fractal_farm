@@ -2,10 +2,35 @@
 <html>
     <head>
         <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+        <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css" integrity="sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm" crossorigin="anonymous">
+        <link rel='stylesheet' type='text/css' href="static/cover.css">
         <link rel='stylesheet' type='text/css' href="static/style.css">
+
         <title>{% block title %}{% endblock title %}</title>
     </head>
-    <body>
-        {% block content %}{% endblock content %}
+    <body class="text-center">
+        <div class="cover-container d-flex h-100 p-3 mx-auto flex-column">
+            <header class="masthead mb-auto">
+                <div class="inner">
+                    <h3 class="masthead-brand">Fractal Farm</h3>
+                    <nav class="nav nav-masthead justify-content-center">
+                        <a class="nav-link" href="/random">Rate</a>
+                        <a class="nav-link" href="/top">Top 10</a>
+                    </nav>
+                </div>
+            </header>
+
+            <main role="main" class="inner cover">
+                {% block content %}{% endblock content %}
+            </main>
+
+            <footer class="mastfoot mt-auto">
+                <div class="inner">
+                    <p><a href="https://github.com/surt91/AFractalADay">GitHub</a></p>
+                </div>
+            </footer>
+        </div>
     </body>
 </html>
