@@ -128,14 +128,11 @@ fn random() -> Template {
 #[get("/duel")]
 fn duel(conn: DbConn) -> Template {
     use schema::fractals::dsl::*;
-    use schema::fractals;
     use models::Fractal;
     use diesel::dsl::sql;
-    // diesel::dsl::sql::<Vec<i64>>("SELECT * FROM table ORDER BY RANDOM() LIMIT 2 WHERE score > 50")
-    //     .get_result(&*conn)
-    //     .expect("Error executing raw SQL");
 
-    let candidates = fractals.filter(fractals::score.gt(50))
+    let candidates = fractals.filter(score.gt(50))
+        .filter(consumed.eq(false))
         .limit(2)
         .order(sql::<i64>("RANDOM()"))
         .load::<Fractal>(&*conn)
@@ -282,6 +279,25 @@ fn top(conn: DbConn) -> Template {
     use schema::fractals::dsl::*;
 
     let pngs: Vec<Fractal> = fractals.order(fractals::elo.desc())
+        .filter(consumed.eq(false))
+        .limit(10)
+        .load::<Fractal>(&*conn)
+        .unwrap();
+
+    let mut context: HashMap<&str, &Vec<Fractal>> = HashMap::new();
+    context.insert("pngs", &pngs);
+
+    Template::render("top", &context)
+}
+
+#[get("/archive")]
+fn archive(conn: DbConn) -> Template {
+    use schema::fractals;
+    use models::Fractal;
+    use schema::fractals::dsl::*;
+
+    let pngs: Vec<Fractal> = fractals.order(fractals::elo.desc())
+        .filter(consumed.eq(true))
         .limit(10)
         .load::<Fractal>(&*conn)
         .unwrap();
@@ -313,7 +329,8 @@ fn main() {
                     render,
                     duel,
                     duel_win,
-                    consume
+                    consume,
+                    archive
                 ]
             )
            .attach(Template::fairing())
