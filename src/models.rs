@@ -9,6 +9,7 @@ pub struct Fractal {
     pub wins: i64,
     pub trials: i64,
     pub elo: i64,
+    pub consumed: bool,
 }
 
 #[derive(Insertable, FromForm, Debug)]

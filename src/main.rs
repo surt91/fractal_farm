@@ -256,6 +256,25 @@ fn render(conn: DbConn, id: i64, width: u32, height: u32) -> Redirect {
     Redirect::to(&format!("/{}", path))
 }
 
+#[get("/consume")]
+fn consume(conn: DbConn) -> String {
+    use models::Fractal;
+    use schema::fractals::dsl::*;
+
+    let f: Fractal = fractals.filter(consumed.eq(false))
+        .order(elo.desc())
+        .first::<Fractal>(&*conn)
+        .unwrap();
+    // FIXME: if all fractals are consumed: handel the error
+
+    diesel::update(fractals.find(f.id))
+        .set(consumed.eq(true))
+        .execute(&*conn)
+        .expect("Error saving new entry");
+
+    f.json
+}
+
 #[get("/top")]
 fn top(conn: DbConn) -> Template {
     use schema::fractals;
@@ -293,7 +312,8 @@ fn main() {
                     top,
                     render,
                     duel,
-                    duel_win
+                    duel_win,
+                    consume
                 ]
             )
            .attach(Template::fairing())

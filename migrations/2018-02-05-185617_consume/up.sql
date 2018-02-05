@@ -1,0 +1,2 @@
+ALTER TABLE fractals ADD COLUMN consumed BOOLEAN NOT NULL DEFAULT 0;
+UPDATE fractals SET consumed=0;

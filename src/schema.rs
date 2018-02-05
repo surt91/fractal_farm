@@ -7,5 +7,6 @@ table! {
         wins -> BigInt,
         trials -> BigInt,
         elo -> BigInt,
+        consumed -> Bool,
     }
 }
