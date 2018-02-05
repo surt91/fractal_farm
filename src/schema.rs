@@ -6,5 +6,6 @@ table! {
         score -> Nullable<BigInt>,
         wins -> BigInt,
         trials -> BigInt,
+        elo -> BigInt,
     }
 }

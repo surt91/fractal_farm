@@ -36,10 +36,11 @@ extern crate serde_derive;
 extern crate serde;
 extern crate serde_json;
 
-pub mod schema;
-pub mod models;
+mod elo;
 
 mod db;
+pub mod schema;
+pub mod models;
 
 use db::DbConn;
 
@@ -79,6 +80,7 @@ fn json2png(json: &str, dim: (u32, u32)) -> PathBuf {
 
     path
 }
+
 
 #[get("/")]
 fn index() -> &'static str {
@@ -194,6 +196,7 @@ struct DuelResult {
 #[post("/duelWin", data = "<result>")]
 fn duel_win(conn: DbConn, result: Form<DuelResult>) -> Redirect {
     use schema::fractals::dsl::*;
+    use models::Fractal;
 
     let winner = result.get().winner;
     let loser = result.get().loser;
@@ -212,6 +215,25 @@ fn duel_win(conn: DbConn, result: Form<DuelResult>) -> Redirect {
 
     diesel::update(fractals.find(winner))
         .set(wins.eq(wins + 1))
+        .execute(&*conn)
+        .expect("Error saving new entry");
+
+    // update elo
+    let winner_fractal: Fractal = fractals.find(winner)
+        .first::<Fractal>(&*conn)
+        .unwrap();
+    let loser_fractal: Fractal = fractals.find(loser)
+        .first::<Fractal>(&*conn)
+        .unwrap();
+
+    let (winner_elo, loser_elo) = self::elo::update(winner_fractal.elo, loser_fractal.elo);
+    diesel::update(fractals.find(loser))
+        .set(elo.eq(loser_elo))
+        .execute(&*conn)
+        .expect("Error saving new entry");
+
+    diesel::update(fractals.find(winner))
+        .set(elo.eq(winner_elo))
         .execute(&*conn)
         .expect("Error saving new entry");
 
@@ -240,7 +262,7 @@ fn top(conn: DbConn) -> Template {
     use models::Fractal;
     use schema::fractals::dsl::*;
 
-    let pngs: Vec<Fractal> = fractals.order(fractals::wins.desc())
+    let pngs: Vec<Fractal> = fractals.order(fractals::elo.desc())
         .limit(10)
         .load::<Fractal>(&*conn)
         .unwrap();
