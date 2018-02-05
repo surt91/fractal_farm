@@ -83,8 +83,8 @@ fn json2png(json: &str, dim: (u32, u32)) -> PathBuf {
 
 
 #[get("/")]
-fn index() -> &'static str {
-    "Hello, world!"
+fn index() -> Redirect {
+    Redirect::to("/duel")
 }
 
 #[get("/random")]
