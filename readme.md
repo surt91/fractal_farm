@@ -19,7 +19,7 @@ This should gather data to improve fractals via some optimization method.
 ## Setup the Database
 
 ```bash
-export DATABASE_URL=sqlite:///foo.db
+export DATABASE_URL=db.sqlite
 cargo install diesel_cli
 diesel setup
 diesel migration run
