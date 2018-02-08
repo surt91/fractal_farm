@@ -1,0 +1,20 @@
+{% extends "base" %}
+{% block title %}Random Fractal{% endblock title %}
+
+{% block content %}
+<h1>Klicke das bessere Fraktal an</h1>
+
+<div class="row">
+    <div class="col-sm">
+        <form action="/rated" method="post">
+            <button class="img-button" name="winner" value="{{ agressor.id }}"><img src="/render/{{ agressor.id }}/512/512"></button>
+            <input hidden name="loser" value="{{ defender.id }}">
+        </form>
+    </div>
+    <div class="col-sm">
+        <a href="/generate">
+            <button class="img-button"><img src="/render/{{ defender.id }}/512/512"></button>
+        </a>
+    </div>
+</div>
+{% endblock content %}

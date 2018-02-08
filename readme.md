@@ -12,7 +12,7 @@ This should gather data to improve fractals via some optimization method.
 *   [x] save json details in database (sqlite)
 *   [ ] make an endpoint to submit json
 *   [ ] json could be directly editable
-*   [ ] option to download a high resolution version
+*   [x] option to download a high resolution version
 *   [ ] better html/css suited for mobile
 
 

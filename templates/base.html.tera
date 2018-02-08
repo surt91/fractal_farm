@@ -5,8 +5,8 @@
         <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
 
         <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css" integrity="sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm" crossorigin="anonymous">
-        <link rel='stylesheet' type='text/css' href="static/cover.css">
-        <link rel='stylesheet' type='text/css' href="static/style.css">
+        <link rel="stylesheet" type="text/css" href="/static/cover.css">
+        <link rel="stylesheet" type="text/css" href="/static/style.css">
 
         <title>{% block title %}{% endblock title %}</title>
     </head>
@@ -16,8 +16,7 @@
                 <div class="inner">
                     <h3 class="masthead-brand">Fractal Farm</h3>
                     <nav class="nav nav-masthead justify-content-center">
-                        <a class="nav-link" href="/random">Erstellen</a>
-                        <a class="nav-link" href="/duel">Vergleichen</a>
+                        <a class="nav-link" href="/generate">Erstellen</a>
                         <a class="nav-link" href="/top">Bestenliste</a>
                         <a class="nav-link" href="/archive">Archiv</a>
                     </nav>

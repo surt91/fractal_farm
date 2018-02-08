@@ -5,7 +5,6 @@
 use std::collections::HashMap;
 
 use std::fs;
-use std::io::prelude::*;
 extern crate time;
 use std::path::{Path, PathBuf};
 
@@ -35,8 +34,6 @@ extern crate serde_derive;
 
 extern crate serde;
 extern crate serde_json;
-
-mod elo;
 
 mod db;
 pub mod schema;
@@ -81,81 +78,114 @@ fn json2png(json: &str, dim: (u32, u32)) -> PathBuf {
     path
 }
 
+fn generate_fractal(seed: usize) -> fractal::fractal::Fractal {
+    let fractal_type = fractal::FractalType::MobiusFlame;
+
+    let fractal = fractal::fractal::FractalBuilder::new()
+        .seed(seed)
+        .style(&None)
+        .variation(&None)
+        .symmetry(&None)
+        .vibrancy(&None)
+        .gamma(&None)
+        .build(&fractal_type);
+
+    fractal
+}
+
 
 #[get("/")]
 fn index() -> Redirect {
-    Redirect::to("/duel")
+    Redirect::to("/generate")
 }
 
-#[get("/random")]
-fn random() -> Template {
+#[get("/generate")]
+fn generate(conn: DbConn) -> Template {
+    use models::Fractal;
+    use schema::fractals;
+
     let seed = time::now_utc().to_timespec().sec as usize;
     let filename = basename2path(&format!("{}", seed));
 
-    let mut json_path = filename.clone();
-    json_path.set_extension("json");
-
-    let fractal_type = fractal::FractalType::MobiusFlame;
+    let mut f = generate_fractal(seed);
 
     let size = 512;
     let dim = (size, size);
 
-    // hacky do while loop
-    let mut fractal = fractal::fractal::FractalBuilder::new()
-                                     .seed(seed)
-                                     .style(&None)
-                                     .variation(&None)
-                                     .symmetry(&None)
-                                     .vibrancy(&None)
-                                     .gamma(&None)
-                                     .build(&fractal_type);
+    let json = fractal::fractal::render_draft(&mut f, filename.to_str().unwrap(), &dim);
 
-    let json = fractal::fractal::render_draft(&mut fractal, filename.to_str().unwrap(), &dim);
+    let old_fractal = fractals::table.order(fractals::rank.desc())
+        .first::<Fractal>(&*conn)
+        .unwrap_or_else(
+            |_| {
+                let first = models::NewFractal {
+                    json: json.clone(),
+                    rank: Some(1)
+                };
 
-    let mut file = fs::File::create(json_path).unwrap();
-    write!(&mut file, "{}", json).unwrap();
+                diesel::insert_into(fractals::table)
+                    .values(&first)
+                    .execute(&*conn)
+                    .expect("Error saving new entry");
 
-    let seed_str = &format!("{}", seed);
+                fractals::table.order(fractals::rank.desc())
+                    .first::<Fractal>(&*conn)
+                    .expect("Can not find first entry I just saved")
+            }
+        );
 
-    let mut context: HashMap<&str, &str> = HashMap::new();
-    context.insert("path", filename.to_str().unwrap());
-    context.insert("json", &json);
-    context.insert("seed", seed_str);
+    let new_fractal = models::NewFractal {
+        json,
+        rank: None
+    };
 
-    Template::render("random", &context)
+    diesel::insert_into(fractals::table)
+        .values(&new_fractal)
+        .execute(&*conn)
+        .expect("Error saving new entry");
+
+    let new_fractal = fractals::table.order(fractals::created_time.desc())
+        .first::<Fractal>(&*conn)
+        .expect("Can not find first entry I just saved");
+
+
+    let mut context: HashMap<&str, &Fractal> = HashMap::new();
+    context.insert("agressor", &new_fractal);
+    context.insert("defender", &old_fractal);
+
+    Template::render("generate", &context)
 }
 
-#[get("/duel")]
-fn duel(conn: DbConn) -> Template {
-    use schema::fractals::dsl::*;
+#[get("/rate/<id>")]
+fn rate(conn: DbConn, id: i64) -> Template {
     use models::Fractal;
-    use diesel::dsl::sql;
+    use schema::fractals;
 
-    let candidates = fractals.filter(score.gt(50))
-        .filter(consumed.eq(false))
-        .limit(2)
-        .order(sql::<i64>("RANDOM()"))
-        .load::<Fractal>(&*conn)
-        .expect("Error getting two random fractals");
+    let agressor = fractals::table.find(id)
+        .first::<Fractal>(&*conn)
+        .expect("the requested id does not exist");
 
-    let c1 = &candidates[0];
-    let c2 = &candidates[1];
+    let opponent_rank = match agressor.rank {
+        Some(x) => x - 1,
+        None => {
+            fractals::table.order(fractals::rank.desc())
+                .first::<Fractal>(&*conn)
+                .map(|x| x.rank)
+                .unwrap_or(None)
+                .unwrap_or(1)
+        }
+    };
 
-    let id1 = format!("{}", c1.id);
-    let id2 = format!("{}", c2.id);
+    println!("{}", opponent_rank);
+    let defender = fractals::table.filter(fractals::rank.eq(opponent_rank))
+        .first::<Fractal>(&*conn)
+        .expect("the requested id-1 does not exist");
 
-    let dim = (512, 512);
+    let mut context: HashMap<&str, &Fractal> = HashMap::new();
+    context.insert("agressor", &agressor);
+    context.insert("defender", &defender);
 
-    let path1 = json2png(&c1.json, dim);
-    let path2 = json2png(&c2.json, dim);
-
-    let mut context: HashMap<&str, &str> = HashMap::new();
-    context.insert("id1", &id1);
-    context.insert("id2", &id2);
-    context.insert("path1", path1.to_str().unwrap());
-    context.insert("path2", path2.to_str().unwrap());
-
-    Template::render("duel", &context)
+    Template::render("generate", &context)
 }
 
 #[get("/list")]
@@ -169,72 +199,59 @@ fn list(conn: DbConn) -> QueryResult<Json<Vec<models::Fractal>>> {
         .map(|x| Json(x))
 }
 
-use models::NewFractal;
-#[post("/grade", data = "<user_input>")]
-fn grade(conn: DbConn, user_input: Form<NewFractal>) -> Redirect {
-    use schema::fractals;
-
-    println!("{:?}", user_input.get());
-
-    diesel::insert_into(fractals::table)
-        .values(user_input.get())
-        .execute(&*conn)
-        .expect("Error saving new entry");
-
-    Redirect::to("/random")
-}
-
 #[derive(FromForm)]
 struct DuelResult {
     winner: i64,
     loser: i64
 }
 
-#[post("/duelWin", data = "<result>")]
-fn duel_win(conn: DbConn, result: Form<DuelResult>) -> Redirect {
-    use schema::fractals::dsl::*;
+#[post("/rated", data = "<result>")]
+fn rated(conn: DbConn, result: Form<DuelResult>) -> Redirect {
+    use schema::fractals;
     use models::Fractal;
 
     let winner = result.get().winner;
     let loser = result.get().loser;
 
-    // TODO maybe use some elo rating instead
+    // the first time, we look at the same thing
+    // so assign it rank 1 and generate the next one
+    if winner == loser {
+        diesel::update(fractals::table.find(winner))
+            .set(fractals::rank.eq(1))
+            .execute(&*conn)
+            .expect("Error saving new entry: winner -> up");
 
-    diesel::update(fractals.find(loser))
-        .set(trials.eq(trials + 1))
+        return Redirect::to("/generate")
+    }
+
+    let won_rank = fractals::table.select(fractals::rank)
+        .find(loser)
+        .first::<Option<i64>>(&*conn)
+        .unwrap()
+        .unwrap_or(1);
+
+    diesel::update(fractals::table.find(loser))
+        .set(fractals::rank.eq::<Option<i64>>(None))
         .execute(&*conn)
-        .expect("Error saving new entry");
-
-    diesel::update(fractals.find(winner))
-        .set(trials.eq(trials + 1))
+        .expect("Error saving new entry: loser -> tmp");
+    diesel::update(fractals::table.find(winner))
+        .set(fractals::rank.eq(won_rank))
         .execute(&*conn)
-        .expect("Error saving new entry");
-
-    diesel::update(fractals.find(winner))
-        .set(wins.eq(wins + 1))
+        .expect("Error saving new entry: winner -> up");
+    diesel::update(fractals::table.find(loser))
+        .set(fractals::rank.eq(won_rank + 1))
         .execute(&*conn)
-        .expect("Error saving new entry");
+        .expect("Error saving new entry: loser -> down");
 
-    // update elo
-    let winner_fractal: Fractal = fractals.find(winner)
+    let winner = fractals::table.find(winner)
         .first::<Fractal>(&*conn)
         .unwrap();
-    let loser_fractal: Fractal = fractals.find(loser)
-        .first::<Fractal>(&*conn)
-        .unwrap();
 
-    let (winner_elo, loser_elo) = self::elo::update(winner_fractal.elo, loser_fractal.elo);
-    diesel::update(fractals.find(loser))
-        .set(elo.eq(loser_elo))
-        .execute(&*conn)
-        .expect("Error saving new entry");
-
-    diesel::update(fractals.find(winner))
-        .set(elo.eq(winner_elo))
-        .execute(&*conn)
-        .expect("Error saving new entry");
-
-    Redirect::to("/duel")
+    if won_rank == 1 {
+        Redirect::to("/generate")
+    } else {
+        Redirect::to(&format!("/rate/{}", winner.id))
+    }
 }
 
 #[get("/render/<id>/<width>/<height>")]
@@ -258,8 +275,10 @@ fn consume(conn: DbConn) -> String {
     use models::Fractal;
     use schema::fractals::dsl::*;
 
-    let f: Fractal = fractals.filter(consumed.eq(false))
-        .order(elo.desc())
+    let f: Fractal = fractals
+        .filter(rank.gt(0))
+        .filter(consumed.eq(false))
+        .order(rank.asc())
         .first::<Fractal>(&*conn)
         .unwrap();
     // FIXME: if all fractals are consumed: handel the error
@@ -278,7 +297,8 @@ fn top(conn: DbConn) -> Template {
     use models::Fractal;
     use schema::fractals::dsl::*;
 
-    let pngs: Vec<Fractal> = fractals.order(fractals::elo.desc())
+    let pngs: Vec<Fractal> = fractals.order(fractals::rank.asc())
+        .filter(rank.gt(0))
         .filter(consumed.eq(false))
         .limit(10)
         .load::<Fractal>(&*conn)
@@ -296,9 +316,9 @@ fn archive(conn: DbConn) -> Template {
     use models::Fractal;
     use schema::fractals::dsl::*;
 
-    let pngs: Vec<Fractal> = fractals.order(fractals::elo.desc())
+    let pngs: Vec<Fractal> = fractals.order(fractals::rank.asc())
+        .filter(rank.gt(0))
         .filter(consumed.eq(true))
-        .limit(10)
         .load::<Fractal>(&*conn)
         .unwrap();
 
@@ -321,16 +341,15 @@ fn main() {
            .mount("/",
                 routes![
                     index,
-                    random,
                     files,
                     list,
-                    grade,
                     top,
                     render,
-                    duel,
-                    duel_win,
                     consume,
-                    archive
+                    archive,
+                    generate,
+                    rate,
+                    rated,
                 ]
             )
            .attach(Template::fairing())
