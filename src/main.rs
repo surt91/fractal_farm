@@ -113,45 +113,29 @@ fn generate_fractal(seed: usize) -> fractal::fractal::Fractal {
     fractal
 }
 
-
-#[get("/")]
-fn index() -> Redirect {
-    Redirect::to("/generate")
-}
-
-#[get("/generate")]
-fn generate(conn: DbConn) -> Template {
+fn add_fractal_to_db(conn: DbConn, json: &str) -> Redirect {
     use models::Fractal;
     use schema::fractals;
 
-    let seed = time::now_utc().to_timespec().sec as usize;
-
-    let f = generate_fractal(seed);
-    let json = f.json();
-
-    let old_fractal = fractals::table.order(fractals::rank.desc())
+    // special case of empty database, add this fractal with rank 1
+    if let None = fractals::table.order(fractals::rank.desc())
         .filter(fractals::rank.le(MAX))
         .first::<Fractal>(&*conn)
-        .unwrap_or_else(
-            |_| {
-                let first = models::NewFractal {
-                    json: json.clone(),
-                    rank: Some(1)
-                };
+        .ok()
+    {
+        let first = models::NewFractal {
+            json: json.to_owned(),
+            rank: Some(1)
+        };
 
-                diesel::insert_into(fractals::table)
-                    .values(&first)
-                    .execute(&*conn)
-                    .expect("Error saving new entry");
-
-                fractals::table.order(fractals::rank.desc())
-                    .first::<Fractal>(&*conn)
-                    .expect("Can not find first entry I just saved")
-            }
-        );
+        diesel::insert_into(fractals::table)
+            .values(&first)
+            .execute(&*conn)
+            .expect("Error saving new entry");
+    }
 
     let new_fractal = models::NewFractal {
-        json,
+        json: json.to_owned(),
         rank: None
     };
 
@@ -174,20 +158,39 @@ fn generate(conn: DbConn) -> Template {
         .unwrap()
         .unwrap_or(1);
 
-    let mut context: HashMap<&str, i64> = HashMap::new();
-    context.insert("agressor", new_id);
-    context.insert("defender", old_fractal.id);
-    context.insert("high", high);
-    context.insert("low", low);
+    Redirect::to(&format!("/rate/{}/{}/{}", new_id, high, low))
+}
 
-    Template::render("generate", &context)
+
+#[get("/")]
+fn index() -> Redirect {
+    Redirect::to("/generate")
+}
+
+#[get("/generate")]
+fn generate(conn: DbConn) -> Redirect {
+    let seed = time::now_utc().to_timespec().sec as usize;
+
+    let f = generate_fractal(seed);
+    let json = f.json();
+
+    add_fractal_to_db(conn, &json)
 }
 
 #[get("/rate/<id>/<high>/<low>")]
 fn rate(conn: DbConn, id: i64, high: i64, low: i64) -> Template {
     use schema::fractals;
 
-    let opponent_rank = (low + high) / 2;
+    let candidate_rank = fractals::table.select(fractals::rank)
+        .find(id)
+        .first::<Option<i64>>(&*conn)
+        .unwrap();
+
+    // if the candidate is new (no rank) start with the worst ranked fractal
+    let opponent_rank = match candidate_rank {
+        Some(_) => (low + high) / 2,
+        None => low
+    };
 
     println!("low {}", low);
     println!("high {}", high);
@@ -195,7 +198,7 @@ fn rate(conn: DbConn, id: i64, high: i64, low: i64) -> Template {
     let pivot_id = fractals::table.select(fractals::id)
         .filter(fractals::rank.eq(opponent_rank))
         .first::<i64>(&*conn)
-        .expect("the requested id-1 does not exist");
+        .expect("the requested rank does not exist");
 
     let mut context: HashMap<&str, i64> = HashMap::new();
     context.insert("agressor", id);
@@ -444,6 +447,11 @@ fn json(conn: DbConn, id: i64) -> Option<content::Json<String>> {
         .first::<String>(&*conn)
         .ok()
         .and_then(|x| Some(content::Json(x)))
+}
+
+#[post("/sumbitJson", data = "<json>")]
+fn submit_json(conn: DbConn, json: String) -> Redirect {
+    add_fractal_to_db(conn, &json)
 }
 
 #[get("/consume")]
