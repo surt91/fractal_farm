@@ -343,16 +343,19 @@ fn above(conn: DbConn, result: Form<DuelResult>) -> Redirect {
         return Redirect::to("/generate")
     }
 
+    println!("above: pivot id: {}", pivot);
+    println!("above: candidate id: {}", candidate);
+
     let pivot_rank = fractals::table.select(fractals::rank)
         .find(pivot)
         .first::<Option<i64>>(&*conn)
-        .unwrap()
+        .expect("abve: Can not find pivot")
         .unwrap();
 
     let candidate_rank = fractals::table.select(fractals::rank)
         .find(candidate)
         .first::<Option<i64>>(&*conn)
-        .unwrap()
+        .expect("abve: Can not find candidate")
         .unwrap_or(MAX + 1);
 
     println!("above: pivot: {}", pivot_rank);
