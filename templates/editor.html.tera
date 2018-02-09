@@ -9,7 +9,9 @@
 {% block content %}
 <div class="row">
     <div class="col-sm">
-        <div id="jsoneditor" style="width: 400px; height: 400px;"></div>
+        <div class="img-holder">
+            <div id="jsoneditor" style="width: 512px; height: 512px;"></div>
+        </div>
     </div>
     <div class="col-sm">
         <div class="img-holder">
@@ -17,8 +19,8 @@
         </div>
     </div>
 </div>
-<button type="button" onclick="post();">apply</button>
-<button type="button" onclick="rate();">rate</button>
+<button type="button" class="btn btn-secondary" onclick="post();">Anwenden</button>
+<button type="button" class="btn btn-success" onclick="rate();">Speichern und Bewerten</button>
 
 <script>
     // create the editor
