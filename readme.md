@@ -10,13 +10,13 @@ This should gather data to improve fractals via some optimization method.
 
 *   [x] submit a score (and the json) to be saved
 *   [x] save json details in database (sqlite)
-*   [ ] make an endpoint to submit json
-*   [ ] json could be directly editable
+*   [x] make an endpoint to submit json
+*   [x] json could be directly editable
 *   [x] option to download a high resolution version
 *   [ ] better html/css suited for mobile
 *   [x] for rating render in draft mode
 *   [ ] create indices on consumed, rank, created_time
-*   [ ] use bisection
+*   [x] use bisection
 
 ## Setup the Database
 
