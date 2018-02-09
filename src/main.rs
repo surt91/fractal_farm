@@ -42,7 +42,7 @@ pub mod models;
 
 use db::DbConn;
 
-const MAX: i64 = 10;
+const MAX: i64 = 100;
 
 fn sha2(input: &str) -> String {
     use sha2::{Sha256, Digest};
