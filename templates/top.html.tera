@@ -3,13 +3,11 @@
 
 {% block content %}
     {% for j in pngs %}
-        <div>
+        <div class="img-holder">
             <p>{{loop.index}}. <a href="/render/{{ j.id }}/1920/1200">download</a></p>
-            <div class="image-holder">
-                <a href="/render/{{ j.id }}/1024/1024">
-                    <img src="/render/{{ j.id }}/512/512">
-                </a>
-            </div>
+            <a href="/render/{{ j.id }}/1024/1024">
+                <img src="/render/{{ j.id }}/512/512">
+            </a>
         </div>
     {% endfor %}
 {% endblock content %}
