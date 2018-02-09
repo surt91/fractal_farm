@@ -130,7 +130,7 @@ fn generate(conn: DbConn) -> Template {
     let json = f.json();
 
     let old_fractal = fractals::table.order(fractals::rank.desc())
-        .filter(fractals::rank.lt(MAX))
+        .filter(fractals::rank.lt(MAX + 1))
         .first::<Fractal>(&*conn)
         .unwrap_or_else(
             |_| {
@@ -240,16 +240,23 @@ fn rated(conn: DbConn, result: Form<DuelResult>) -> Redirect {
         return Redirect::to("/generate")
     }
 
-    diesel::update(fractals::table.filter(fractals::rank.gt(MAX - 1)))
-            .set(fractals::rank.eq::<Option<i64>>(None))
-            .execute(&*conn)
-            .expect("Error saving new entry: winner -> up");
-
     let won_rank = fractals::table.select(fractals::rank)
         .find(loser)
         .first::<Option<i64>>(&*conn)
         .unwrap()
         .unwrap_or(1);
+
+    if won_rank == MAX {
+        diesel::update(fractals::table.filter(fractals::rank.gt(MAX - 1)))
+                .set(fractals::rank.eq::<Option<i64>>(None))
+                .execute(&*conn)
+                .expect("Error saving new entry: winner -> up");
+    } else {
+        diesel::update(fractals::table.filter(fractals::rank.gt(MAX)))
+                .set(fractals::rank.eq::<Option<i64>>(None))
+                .execute(&*conn)
+                .expect("Error saving new entry: winner -> up");
+    }
 
     diesel::update(fractals::table.find(loser))
         .set(fractals::rank.eq::<Option<i64>>(None))
