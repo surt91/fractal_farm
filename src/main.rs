@@ -1,5 +1,6 @@
 #![feature(plugin)]
 #![feature(custom_derive)]
+#![feature(inclusive_range_syntax)]
 #![plugin(rocket_codegen)]
 
 use std::collections::HashMap;
@@ -468,9 +469,29 @@ fn consume(conn: DbConn) -> String {
     // FIXME: if all fractals are consumed: handel the error
 
     diesel::update(fractals.find(f.id))
-        .set(consumed.eq(true))
+        .set((
+            consumed.eq(true),
+            rank.eq::<Option<i64>>(None),
+        ))
         .execute(&*conn)
         .expect("Error saving new entry");
+
+    let max_rank = fractals.select(diesel::dsl::max(rank))
+        .first::<Option<i64>>(&*conn)
+        .unwrap()
+        .unwrap_or(1);
+
+    // FIXME: there has to be a way to do is thin one query
+    // TODO write SQL by hand?
+    for i in (2..=max_rank).rev() {
+        println!("{}", i);
+        diesel::update(
+                fractals.filter(rank.eq(i))
+            )
+            .set(rank.eq(rank + 1))
+            .execute(&*conn)
+            .expect("Error saving new entry: make space");
+    }
 
     f.json
 }
@@ -500,7 +521,7 @@ fn archive(conn: DbConn) -> Template {
     use models::Fractal;
     use schema::fractals::dsl::*;
 
-    let pngs: Vec<Fractal> = fractals.order(fractals::rank.asc())
+    let pngs: Vec<Fractal> = fractals.order(fractals::created_time.asc())
         .filter(rank.gt(0))
         .filter(consumed.eq(true))
         .load::<Fractal>(&*conn)
