@@ -8,6 +8,8 @@
         <link rel="stylesheet" type="text/css" href="/static/cover.css">
         <link rel="stylesheet" type="text/css" href="/static/style.css">
 
+        {% block head %}{% endblock head %}
+
         <title>{% block title %}{% endblock title %}</title>
     </head>
     <body class="text-center">

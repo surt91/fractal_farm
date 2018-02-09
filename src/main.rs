@@ -114,14 +114,14 @@ fn generate_fractal(seed: usize) -> fractal::fractal::Fractal {
     fractal
 }
 
-fn add_fractal_to_db(conn: DbConn, json: &str) -> Redirect {
+fn add_fractal_to_db(conn: &DbConn, json: &str) -> (i64, i64, i64) {
     use models::Fractal;
     use schema::fractals;
 
     // special case of empty database, add this fractal with rank 1
     if let None = fractals::table.order(fractals::rank.desc())
         .filter(fractals::rank.le(MAX))
-        .first::<Fractal>(&*conn)
+        .first::<Fractal>(&**conn)
         .ok()
     {
         let first = models::NewFractal {
@@ -131,7 +131,7 @@ fn add_fractal_to_db(conn: DbConn, json: &str) -> Redirect {
 
         diesel::insert_into(fractals::table)
             .values(&first)
-            .execute(&*conn)
+            .execute(&**conn)
             .expect("Error saving new entry");
     }
 
@@ -142,24 +142,24 @@ fn add_fractal_to_db(conn: DbConn, json: &str) -> Redirect {
 
     diesel::insert_into(fractals::table)
         .values(&new_fractal)
-        .execute(&*conn)
+        .execute(&**conn)
         .expect("Error saving new entry");
 
     let new_id = fractals::table.select(fractals::id)
         .order(fractals::created_time.desc())
-        .first::<i64>(&*conn)
+        .first::<i64>(&**conn)
         .expect("Can not find first entry I just saved");
 
     let high = fractals::table.select(diesel::dsl::min(fractals::rank))
-        .first::<Option<i64>>(&*conn)
+        .first::<Option<i64>>(&**conn)
         .unwrap()
         .unwrap_or(1);
     let low = fractals::table.select(diesel::dsl::max(fractals::rank))
-        .first::<Option<i64>>(&*conn)
+        .first::<Option<i64>>(&**conn)
         .unwrap()
         .unwrap_or(1);
 
-    Redirect::to(&format!("/rate/{}/{}/{}", new_id, high, low))
+    (new_id, high, low)
 }
 
 
@@ -175,7 +175,9 @@ fn generate(conn: DbConn) -> Redirect {
     let f = generate_fractal(seed);
     let json = f.json();
 
-    add_fractal_to_db(conn, &json)
+    let (new_id, high, low) = add_fractal_to_db(&conn, &json);
+
+    Redirect::to(&format!("/rate/{}/{}/{}", new_id, high, low))
 }
 
 #[get("/rate/<id>/<high>/<low>")]
@@ -453,9 +455,24 @@ fn json(conn: DbConn, id: i64) -> Option<content::Json<String>> {
         .and_then(|x| Some(content::Json(x)))
 }
 
-#[post("/sumbitJson", data = "<json>")]
-fn submit_json(conn: DbConn, json: String) -> Redirect {
-    add_fractal_to_db(conn, &json)
+#[derive(Serialize)]
+struct SubmitDetails {
+    pub id: i64,
+    pub low: i64,
+    pub high: i64,
+}
+#[post("/submitJson", data = "<json>")]
+fn submit_json(conn: DbConn, json: String) -> Json<SubmitDetails> {
+    add_fractal_to_db(&conn, &json);
+
+    let (id, high, low) = add_fractal_to_db(&conn, &json);
+    Json(
+        SubmitDetails {
+            id,
+            low,
+            high
+        }
+    )
 }
 
 #[get("/consume")]
@@ -536,6 +553,29 @@ fn archive(conn: DbConn) -> Template {
     Template::render("top", &context)
 }
 
+#[get("/editor/<id>")]
+fn editor(conn: DbConn, id: i64) -> Option<Template> {
+    use schema::fractals;
+
+    let json = fractals::table.select(fractals::json)
+        .find(id)
+        .first::<String>(&*conn)
+        .ok();
+
+    let id_str = format!("{}", id);
+
+    match json {
+        Some(j) => {
+            let mut context: HashMap<&str, &str> = HashMap::new();
+            context.insert("json", &j);
+            context.insert("id", &id_str);
+
+            Some(Template::render("editor", &context))
+        }
+        None => None
+    }
+}
+
 #[get("/<file..>", rank = 2)]
 fn files(file: PathBuf) -> Option<NamedFile> {
     NamedFile::open(Path::new(".").join(file)).ok()
@@ -560,7 +600,9 @@ fn main() {
                     generate,
                     rate,
                     above,
-                    below
+                    below,
+                    editor,
+                    submit_json
                 ]
             )
            .attach(Template::fairing())

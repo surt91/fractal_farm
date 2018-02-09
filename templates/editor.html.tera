@@ -1,0 +1,73 @@
+{% extends "base" %}
+{% block title %}Json Editor{% endblock title %}
+
+{% block head %}
+    <link href="/static/jsoneditor.min.css" rel="stylesheet" type="text/css">
+    <script src="/static/jsoneditor.min.js"></script>
+{% endblock head %}
+
+{% block content %}
+<div class="row">
+    <div class="col-sm">
+        <div id="jsoneditor" style="width: 400px; height: 400px;"></div>
+    </div>
+    <div class="col-sm">
+        <div class="img-holder">
+            <img id="pic" src="/render/{{ id }}/512/512">
+        </div>
+    </div>
+</div>
+<button type="button" onclick="post();">apply</button>
+<button type="button" onclick="rate();">rate</button>
+
+<script>
+    // create the editor
+    var container = document.getElementById("jsoneditor");
+    var options = {};
+    var editor = new JSONEditor(container, options);
+
+    // set json
+    var json = {{ json | safe }};
+    editor.set(json);
+
+    var setPic = function(source) {
+        console.log(source);
+        document.getElementById("pic").src = source;
+    }
+
+    var post = function() {
+        var json = editor.get();
+
+        fetch("/submitJson",
+        {
+            method: "POST",
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'text/plain',
+            },
+            body: JSON.stringify(json)
+        })
+        .then(res => res.json())
+        .then(res => setPic("/draft/" + res["id"] + "/512/512"));
+    }
+
+    var rate = function() {
+        var json = editor.get();
+
+        fetch("/submitJson",
+        {
+            method: "POST",
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+            },
+            body: JSON.stringify(json)
+        })
+        .then(res => res.json())
+        .then(res => window.location.href = "/rate/" + res["id"] + "/" + res["high"] + "/" + res["low"]);
+    }
+</script>
+
+
+
+{% endblock content %}
