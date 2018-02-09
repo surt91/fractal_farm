@@ -78,6 +78,24 @@ fn json2png(json: &str, dim: (u32, u32)) -> PathBuf {
     path
 }
 
+fn json2draft(json: &str, dim: (u32, u32)) -> PathBuf {
+    let filename = format!("d_{}x{}_{}", dim.0, dim.1, sha2(json));
+    let path = basename2path(&filename);
+
+    if path.exists() {
+        return path
+    }
+
+    let fractal_type = fractal::FractalType::LoadJson(json.to_owned());
+
+    let mut fractal = fractal::fractal::FractalBuilder::new()
+                              .build(&fractal_type);
+
+    fractal::fractal::render_draft(&mut fractal, path.to_str().unwrap(), &dim);
+
+    path
+}
+
 fn generate_fractal(seed: usize) -> fractal::fractal::Fractal {
     let fractal_type = fractal::FractalType::MobiusFlame;
 
@@ -105,14 +123,9 @@ fn generate(conn: DbConn) -> Template {
     use schema::fractals;
 
     let seed = time::now_utc().to_timespec().sec as usize;
-    let filename = basename2path(&format!("{}", seed));
 
-    let mut f = generate_fractal(seed);
-
-    let size = 512;
-    let dim = (size, size);
-
-    let json = fractal::fractal::render_draft(&mut f, filename.to_str().unwrap(), &dim);
+    let f = generate_fractal(seed);
+    let json = f.json();
 
     let old_fractal = fractals::table.order(fractals::rank.desc())
         .first::<Fractal>(&*conn)
@@ -258,7 +271,6 @@ fn rated(conn: DbConn, result: Form<DuelResult>) -> Redirect {
 fn render(conn: DbConn, id: i64, width: u32, height: u32) -> Redirect {
     use models::Fractal;
     use schema::fractals;
-    // use schema::fractals::dsl::*;
 
     let f: Fractal = fractals::table.find(id)
         .first::<Fractal>(&*conn)
@@ -266,6 +278,21 @@ fn render(conn: DbConn, id: i64, width: u32, height: u32) -> Redirect {
 
     let dim = (width, height);
     let path = json2png(&f.json, dim);
+    let path = path.to_str().unwrap();
+    Redirect::to(&format!("/{}", path))
+}
+
+#[get("/draft/<id>/<width>/<height>")]
+fn render_draft(conn: DbConn, id: i64, width: u32, height: u32) -> Redirect {
+    use models::Fractal;
+    use schema::fractals;
+
+    let f: Fractal = fractals::table.find(id)
+        .first::<Fractal>(&*conn)
+        .unwrap();
+
+    let dim = (width, height);
+    let path = json2draft(&f.json, dim);
     let path = path.to_str().unwrap();
     Redirect::to(&format!("/{}", path))
 }

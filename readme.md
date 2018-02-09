@@ -14,7 +14,9 @@ This should gather data to improve fractals via some optimization method.
 *   [ ] json could be directly editable
 *   [x] option to download a high resolution version
 *   [ ] better html/css suited for mobile
-
+*   [x] for rating render in draft mode
+*   [ ] create indices on consumed, rank, created_time
+*   [ ] use bisection
 
 ## Setup the Database
 
