@@ -41,6 +41,8 @@ pub mod models;
 
 use db::DbConn;
 
+const MAX: i64 = 10;
+
 fn sha2(input: &str) -> String {
     use sha2::{Sha256, Digest};
 
@@ -128,6 +130,7 @@ fn generate(conn: DbConn) -> Template {
     let json = f.json();
 
     let old_fractal = fractals::table.order(fractals::rank.desc())
+        .filter(fractals::rank.lt(MAX))
         .first::<Fractal>(&*conn)
         .unwrap_or_else(
             |_| {
@@ -237,11 +240,18 @@ fn rated(conn: DbConn, result: Form<DuelResult>) -> Redirect {
         return Redirect::to("/generate")
     }
 
+    diesel::update(fractals::table.filter(fractals::rank.gt(MAX - 1)))
+            .set(fractals::rank.eq::<Option<i64>>(None))
+            .execute(&*conn)
+            .expect("Error saving new entry: winner -> up");
+
     let won_rank = fractals::table.select(fractals::rank)
         .find(loser)
         .first::<Option<i64>>(&*conn)
         .unwrap()
         .unwrap_or(1);
+
+    println!("{:?}", won_rank);
 
     diesel::update(fractals::table.find(loser))
         .set(fractals::rank.eq::<Option<i64>>(None))
@@ -283,7 +293,7 @@ fn render(conn: DbConn, id: i64, width: u32, height: u32) -> Redirect {
 }
 
 #[get("/draft/<id>/<width>/<height>")]
-fn render_draft(conn: DbConn, id: i64, width: u32, height: u32) -> Redirect {
+fn draft(conn: DbConn, id: i64, width: u32, height: u32) -> Redirect {
     use models::Fractal;
     use schema::fractals;
 
@@ -327,7 +337,7 @@ fn top(conn: DbConn) -> Template {
     let pngs: Vec<Fractal> = fractals.order(fractals::rank.asc())
         .filter(rank.gt(0))
         .filter(consumed.eq(false))
-        .limit(10)
+        .limit(MAX)
         .load::<Fractal>(&*conn)
         .unwrap();
 
@@ -372,6 +382,7 @@ fn main() {
                     list,
                     top,
                     render,
+                    draft,
                     consume,
                     archive,
                     generate,
