@@ -6,15 +6,20 @@
 
 <div class="row">
     <div class="col-sm">
-        <form action="/rated" method="post">
-            <button class="img-button" name="winner" value="{{ agressor.id }}"><img width="512" height="512" src="/draft/{{ agressor.id }}/512/512"></button>
-            <input hidden name="loser" value="{{ defender.id }}">
+        <form action="/above" method="post">
+            <button class="img-button" name="candidate" value="{{ agressor }}"><img width="512" height="512" src="/draft/{{ agressor }}/512/512"></button>
+            <input hidden name="pivot" value="{{ defender }}">
+            <input hidden name="low" value="{{ low }}">
+            <input hidden name="high" value="{{ high }}">
         </form>
     </div>
     <div class="col-sm">
-        <a href="/generate">
-            <button class="img-button"><img width="512" height="512" src="/draft/{{ defender.id }}/512/512"></button>
-        </a>
+        <form action="/below" method="post">
+            <button class="img-button" name="pivot" value="{{ defender }}"><img width="512" height="512" src="/draft/{{ defender }}/512/512"></button>
+            <input hidden name="candidate" value="{{ agressor }}">
+            <input hidden name="low" value="{{ low }}">
+            <input hidden name="high" value="{{ high }}">
+        </form>
     </div>
 </div>
 {% endblock content %}
