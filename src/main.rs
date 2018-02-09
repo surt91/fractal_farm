@@ -18,7 +18,7 @@ extern crate a_fractal_a_day;
 use a_fractal_a_day as fractal;
 
 extern crate rocket;
-use rocket::response::{NamedFile, Redirect};
+use rocket::response::{NamedFile, Redirect, content};
 use rocket::request::Form;
 
 extern crate rocket_contrib;
@@ -435,6 +435,17 @@ fn draft(conn: DbConn, id: i64, width: u32, height: u32) -> Redirect {
     Redirect::to(&format!("/{}", path))
 }
 
+#[get("/json/<id>")]
+fn json(conn: DbConn, id: i64) -> Option<content::Json<String>> {
+    use schema::fractals;
+
+    fractals::table.select(fractals::json)
+        .find(id)
+        .first::<String>(&*conn)
+        .ok()
+        .and_then(|x| Some(content::Json(x)))
+}
+
 #[get("/consume")]
 fn consume(conn: DbConn) -> String {
     use models::Fractal;
@@ -511,6 +522,7 @@ fn main() {
                     top,
                     render,
                     draft,
+                    json,
                     consume,
                     archive,
                     generate,

@@ -4,7 +4,7 @@
 {% block content %}
     {% for j in pngs %}
         <div class="img-holder">
-            <p>{{loop.index}}. <a href="/render/{{ j.id }}/1920/1200">download</a></p>
+            <p>{{loop.index}}. <a href="/render/{{ j.id }}/1920/1200">download</a>, <a href="/json/{{ j.id }}">json</a></p>
             <a href="/render/{{ j.id }}/1024/1024">
                 <img src="/render/{{ j.id }}/512/512">
             </a>
