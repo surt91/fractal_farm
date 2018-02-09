@@ -274,7 +274,7 @@ fn below(conn: DbConn, result: Form<DuelResult>) -> Redirect {
         return Redirect::to("/generate")
     }
 
-    if pivot > candidate {
+    if pivot_rank > candidate_rank {
         // set the candidate rank to NULL
         diesel::update(fractals::table.find(candidate))
             .set(fractals::rank.eq::<Option<i64>>(None))
@@ -358,7 +358,7 @@ fn above(conn: DbConn, result: Form<DuelResult>) -> Redirect {
     println!("above: pivot: {}", pivot_rank);
     println!("above: candidate: {}", candidate_rank);
 
-    if pivot < candidate {
+    if pivot_rank < candidate_rank {
         // set the candidate rank to NULL
         diesel::update(fractals::table.find(candidate))
             .set(fractals::rank.eq::<Option<i64>>(None))
