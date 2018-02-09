@@ -251,8 +251,6 @@ fn rated(conn: DbConn, result: Form<DuelResult>) -> Redirect {
         .unwrap()
         .unwrap_or(1);
 
-    println!("{:?}", won_rank);
-
     diesel::update(fractals::table.find(loser))
         .set(fractals::rank.eq::<Option<i64>>(None))
         .execute(&*conn)
