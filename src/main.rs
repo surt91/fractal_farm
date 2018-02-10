@@ -65,6 +65,13 @@ fn basename2path(name: &str) -> PathBuf {
     filename
 }
 
+fn json2fractal(json: &str) -> fractal::fractal::Fractal {
+    let fractal_type = fractal::FractalType::LoadJson(json.to_owned());
+
+    fractal::fractal::FractalBuilder::new()
+        .build(&fractal_type)
+}
+
 fn json2png(json: &str, dim: (u32, u32)) -> PathBuf {
     let filename = format!("{}x{}_{}", dim.0, dim.1, sha2(json));
     let path = basename2path(&filename);
@@ -73,10 +80,7 @@ fn json2png(json: &str, dim: (u32, u32)) -> PathBuf {
         return path
     }
 
-    let fractal_type = fractal::FractalType::LoadJson(json.to_owned());
-
-    let mut fractal = fractal::fractal::FractalBuilder::new()
-                              .build(&fractal_type);
+    let mut fractal = json2fractal(json);
 
     fractal::fractal::render_wrapper(&mut fractal, path.to_str().unwrap(), &dim, false);
 
@@ -91,10 +95,7 @@ fn json2draft(json: &str, dim: (u32, u32)) -> PathBuf {
         return path
     }
 
-    let fractal_type = fractal::FractalType::LoadJson(json.to_owned());
-
-    let mut fractal = fractal::fractal::FractalBuilder::new()
-                              .build(&fractal_type);
+    let mut fractal = json2fractal(json);
 
     fractal::fractal::render_draft(&mut fractal, path.to_str().unwrap(), &dim);
 
