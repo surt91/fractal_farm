@@ -20,7 +20,6 @@ use a_fractal_a_day as fractal;
 
 extern crate rocket;
 use rocket::response::{NamedFile, Redirect, content};
-use rocket::request::Form;
 
 extern crate rocket_contrib;
 use rocket_contrib::{Json,Template};
@@ -37,10 +36,13 @@ extern crate serde;
 extern crate serde_json;
 
 mod db;
+mod db_convenience;
 pub mod schema;
 pub mod models;
 
 use db::DbConn;
+
+mod rating;
 
 const MAX: i64 = 100;
 
@@ -162,30 +164,6 @@ fn add_fractal_to_db(conn: &DbConn, json: &str) -> (i64, i64, i64) {
     (new_id, high, low)
 }
 
-// will move all entries between min and max by offset ranks
-// you have to make sure that the unique constraint will not be violated
-fn db_offset_rank(conn: &DbConn, min: i64, max: i64, offset: i64) {
-    use schema::fractals::dsl::*;
-
-    let safe = if MAX > MAX + offset { MAX } else { MAX + offset };
-
-    diesel::update(
-            fractals.filter(rank.ge(min))
-                .filter(rank.le(max))
-        )
-        .set(rank.eq(rank + safe))
-        .execute(&**conn)
-        .expect("Error moving outside");
-
-    diesel::update(
-            fractals.filter(rank.ge(min+safe))
-                .filter(rank.le(max+safe))
-        )
-        .set(rank.eq(rank - safe + offset))
-        .execute(&**conn)
-        .expect("Error moving by offset");
-}
-
 #[get("/")]
 fn index() -> Redirect {
     Redirect::to("/generate")
@@ -203,37 +181,6 @@ fn generate(conn: DbConn) -> Redirect {
     Redirect::to(&format!("/rate/{}/{}/{}", new_id, high, low))
 }
 
-#[get("/rate/<id>/<high>/<low>")]
-fn rate(conn: DbConn, id: i64, high: i64, low: i64) -> Template {
-    use schema::fractals;
-
-    let candidate_rank = fractals::table.select(fractals::rank)
-        .find(id)
-        .first::<Option<i64>>(&*conn)
-        .unwrap();
-
-    // if the candidate is new (no rank) start with the worst ranked fractal
-    let opponent_rank = match candidate_rank {
-        Some(_) => (low + high) / 2,
-        None => low
-    };
-
-    println!("low {}", low);
-    println!("high {}", high);
-    println!("opp rank {}", opponent_rank);
-    let pivot_id = fractals::table.select(fractals::id)
-        .filter(fractals::rank.eq(opponent_rank))
-        .first::<i64>(&*conn)
-        .expect("the requested rank does not exist");
-
-    let mut context: HashMap<&str, i64> = HashMap::new();
-    context.insert("agressor", id);
-    context.insert("defender", pivot_id);
-    context.insert("high", high);
-    context.insert("low", low);
-
-    Template::render("generate", &context)
-}
 
 #[get("/list")]
 fn list(conn: DbConn) -> QueryResult<Json<Vec<models::Fractal>>> {
@@ -244,160 +191,6 @@ fn list(conn: DbConn) -> QueryResult<Json<Vec<models::Fractal>>> {
     fractals.order(fractals::id.desc())
         .load::<Fractal>(&*conn)
         .map(|x| Json(x))
-}
-
-#[derive(FromForm)]
-struct DuelResult {
-    candidate: i64,
-    pivot: i64,
-    low: i64,
-    high: i64,
-}
-
-#[post("/below", data = "<result>")]
-fn below(conn: DbConn, result: Form<DuelResult>) -> Redirect {
-    use schema::fractals;
-
-    let pivot = result.get().pivot;
-    let candidate = result.get().candidate;
-    // let high = result.get().high;
-    let low = result.get().low;
-
-    // the first time, we look at the same thing
-    // so assign it rank 1 and generate the next one
-    if pivot == candidate {
-        diesel::update(fractals::table.find(candidate))
-            .set(fractals::rank.eq(1))
-            .execute(&*conn)
-            .expect("Error saving new entry: winner -> up");
-
-        return Redirect::to("/generate")
-    }
-
-    let pivot_rank = fractals::table.select(fractals::rank)
-        .find(pivot)
-        .first::<Option<i64>>(&*conn)
-        .unwrap()
-        .unwrap_or(1);
-
-    let candidate_rank = fractals::table.select(fractals::rank)
-        .find(candidate)
-        .first::<Option<i64>>(&*conn)
-        .unwrap()
-        .unwrap_or(MAX + 1);
-
-    println!("below: candidate id: {}", candidate);
-    println!("below: pivot: {}", pivot_rank);
-    println!("below: candidate: {}", candidate_rank);
-
-    if pivot_rank == MAX || candidate_rank == MAX + 1 {
-        // remove candidate from database
-        diesel::delete(fractals::table.find(candidate))
-            .execute(&*conn)
-            .expect("Error deleting posts");
-
-        return Redirect::to("/generate")
-    }
-
-    if pivot_rank > candidate_rank {
-        // set the candidate rank to NULL
-        diesel::update(fractals::table.find(candidate))
-            .set(fractals::rank.eq::<Option<i64>>(None))
-            .execute(&*conn)
-            .expect("Error saving new entry: winner -> null");
-
-        db_offset_rank(&conn, pivot_rank, candidate_rank, -1);
-
-        // insert candidate into the empty spot of the pivot
-        diesel::update(fractals::table.find(candidate))
-            .set(fractals::rank.eq(pivot_rank))
-            .execute(&*conn)
-            .expect("Error saving new entry: winner -> pivot");
-
-        // limit to MAX
-        diesel::update(fractals::table.filter(fractals::rank.gt(MAX)))
-            .set(fractals::rank.eq::<Option<i64>>(None))
-            .execute(&*conn)
-            .expect("Error saving new entry: limit to MAX");
-    }
-
-    let high = pivot_rank + 1;
-
-    if high == low {
-        Redirect::to("/generate")
-    } else {
-        Redirect::to(&format!("/rate/{}/{}/{}", candidate, high, low))
-    }
-}
-
-#[post("/above", data = "<result>")]
-fn above(conn: DbConn, result: Form<DuelResult>) -> Redirect {
-    use schema::fractals;
-
-    let pivot = result.get().pivot;
-    let candidate = result.get().candidate;
-    let high = result.get().high;
-    // let low = result.get().low;
-
-    // the first time, we look at the same thing
-    // so assign it rank 1 and generate the next one
-    if pivot == candidate {
-        diesel::update(fractals::table.find(candidate))
-            .set(fractals::rank.eq(1))
-            .execute(&*conn)
-            .expect("Error saving new entry: winner -> up");
-
-        return Redirect::to("/generate")
-    }
-
-    println!("above: pivot id: {}", pivot);
-    println!("above: candidate id: {}", candidate);
-
-    let pivot_rank = fractals::table.select(fractals::rank)
-        .find(pivot)
-        .first::<Option<i64>>(&*conn)
-        .expect("abve: Can not find pivot")
-        .unwrap();
-
-    let candidate_rank = fractals::table.select(fractals::rank)
-        .find(candidate)
-        .first::<Option<i64>>(&*conn)
-        .expect("abve: Can not find candidate")
-        .unwrap_or(MAX + 1);
-
-    println!("above: pivot: {}", pivot_rank);
-    println!("above: candidate: {}", candidate_rank);
-
-    if pivot_rank < candidate_rank {
-        // set the candidate rank to NULL
-        diesel::update(fractals::table.find(candidate))
-            .set(fractals::rank.eq::<Option<i64>>(None))
-            .execute(&*conn)
-            .expect("Error saving new entry: winner -> null");
-
-        db_offset_rank(&conn, pivot_rank, candidate_rank, 1);
-
-        // insert candidate into the empty spot of the pivot
-        diesel::update(fractals::table.find(candidate))
-            .set(fractals::rank.eq(pivot_rank))
-            .execute(&*conn)
-            .expect("Error saving new entry: winner -> pivot");
-
-        // limit to MAX
-        diesel::update(fractals::table.filter(fractals::rank.gt(MAX)))
-            .set(fractals::rank.eq::<Option<i64>>(None))
-            .execute(&*conn)
-            .expect("Error saving new entry: limit to MAX");
-    }
-
-    let low = pivot_rank;
-    println!("{} {}", low, high);
-
-    if high == low {
-        Redirect::to("/generate")
-    } else {
-        Redirect::to(&format!("/rate/{}/{}/{}", candidate, high, low))
-    }
 }
 
 #[get("/render/<id>/<width>/<height>")]
@@ -488,7 +281,7 @@ fn consume(conn: DbConn) -> String {
         .unwrap()
         .unwrap_or(1);
 
-    db_offset_rank(&conn, 2, max_rank, -1);
+    db_convenience::offset_rank(&conn, 2, max_rank, -1);
 
     f.json
 }
@@ -574,9 +367,9 @@ fn main() {
                     consume,
                     archive,
                     generate,
-                    rate,
-                    above,
-                    below,
+                    rating::rate,
+                    rating::above,
+                    rating::below,
                     editor,
                     submit_json
                 ]
