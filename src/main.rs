@@ -508,7 +508,7 @@ fn consume(conn: DbConn) -> String {
         diesel::update(
                 fractals.filter(rank.eq(i))
             )
-            .set(rank.eq(rank + 1))
+            .set(rank.eq(rank - 1))
             .execute(&*conn)
             .expect("Error saving new entry: make space");
     }
