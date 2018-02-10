@@ -523,6 +523,7 @@ fn top(conn: DbConn) -> Template {
     use schema::fractals::dsl::*;
 
     let pngs: Vec<Fractal> = fractals.order(fractals::rank.asc())
+        .filter(rank.gt(0))
         .filter(consumed.eq(false))
         .limit(MAX)
         .load::<Fractal>(&*conn)
@@ -541,7 +542,6 @@ fn archive(conn: DbConn) -> Template {
     use schema::fractals::dsl::*;
 
     let pngs: Vec<Fractal> = fractals.order(fractals::created_time.asc())
-        .filter(rank.gt(0))
         .filter(consumed.eq(true))
         .load::<Fractal>(&*conn)
         .unwrap();
