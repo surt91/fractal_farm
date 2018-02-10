@@ -503,7 +503,7 @@ fn consume(conn: DbConn) -> String {
 
     // FIXME: there has to be a way to do is thin one query
     // TODO write SQL by hand?
-    for i in (2..=max_rank).rev() {
+    for i in 2..=max_rank {
         println!("{}", i);
         diesel::update(
                 fractals.filter(rank.eq(i))
