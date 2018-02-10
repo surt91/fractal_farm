@@ -15,7 +15,7 @@ This should gather data to improve fractals via some optimization method.
 *   [x] option to download a high resolution version
 *   [ ] better html/css suited for mobile
 *   [x] for rating render in draft mode
-*   [ ] create indices on consumed, rank, created_time
+*   [x] create indices on consumed, rank, created_time
 *   [x] use bisection
 
 ## Setup the Database
