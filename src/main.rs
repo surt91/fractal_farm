@@ -162,6 +162,29 @@ fn add_fractal_to_db(conn: &DbConn, json: &str) -> (i64, i64, i64) {
     (new_id, high, low)
 }
 
+// will move all entries between min and max by offset ranks
+// you have to make sure that the unique constraint will not be violated
+fn db_offset_rank(conn: &DbConn, min: i64, max: i64, offset: i64) {
+    use schema::fractals::dsl::*;
+
+    let safe = if MAX > MAX + offset { MAX } else { MAX + offset };
+
+    diesel::update(
+            fractals.filter(rank.ge(min))
+                .filter(rank.le(max))
+        )
+        .set(rank.eq(rank + safe))
+        .execute(&**conn)
+        .expect("Error moving outside");
+
+    diesel::update(
+            fractals.filter(rank.ge(min+safe))
+                .filter(rank.le(max+safe))
+        )
+        .set(rank.eq(rank - safe + offset))
+        .execute(&**conn)
+        .expect("Error moving by offset");
+}
 
 #[get("/")]
 fn index() -> Redirect {
@@ -283,25 +306,7 @@ fn below(conn: DbConn, result: Form<DuelResult>) -> Redirect {
             .execute(&*conn)
             .expect("Error saving new entry: winner -> null");
 
-        // move all up, between the current rank and the pivot rank
-        // diesel::update(
-        //         fractals::table.filter(fractals::rank.le(pivot_rank))
-        //             .filter(fractals::rank.gt(candidate_rank))
-        //     )
-        //     .set(fractals::rank.eq(fractals::rank - 1))
-        //     .execute(&*conn)
-        //     .expect("Error saving new entry: make space");
-        // FIXME: there has to be a way to do is thin one query
-        // TODO write SQL by hand?
-        for i in (pivot_rank..candidate_rank).rev() {
-            println!("{}", i);
-            diesel::update(
-                    fractals::table.filter(fractals::rank.eq(i))
-                )
-                .set(fractals::rank.eq(fractals::rank - 1))
-                .execute(&*conn)
-                .expect("Error saving new entry: make space");
-        }
+        db_offset_rank(&conn, pivot_rank, candidate_rank, -1);
 
         // insert candidate into the empty spot of the pivot
         diesel::update(fractals::table.find(candidate))
@@ -370,26 +375,7 @@ fn above(conn: DbConn, result: Form<DuelResult>) -> Redirect {
             .execute(&*conn)
             .expect("Error saving new entry: winner -> null");
 
-
-        // move all down, between the current rank and the pivot rank
-        // diesel::update(
-        //         fractals::table.filter(fractals::rank.ge(pivot_rank))
-        //             .filter(fractals::rank.lt(candidate_rank))
-        //     )
-        //     .set(fractals::rank.eq(fractals::rank + 1))
-        //     .execute(&*conn)
-        //     .expect("Error saving new entry: make space");
-        // FIXME: there has to be a way to do is thin one query
-        // TODO write SQL by hand?
-        for i in (pivot_rank..candidate_rank).rev() {
-            println!("{}", i);
-            diesel::update(
-                    fractals::table.filter(fractals::rank.eq(i))
-                )
-                .set(fractals::rank.eq(fractals::rank + 1))
-                .execute(&*conn)
-                .expect("Error saving new entry: make space");
-        }
+        db_offset_rank(&conn, pivot_rank, candidate_rank, 1);
 
         // insert candidate into the empty spot of the pivot
         diesel::update(fractals::table.find(candidate))
@@ -496,22 +482,13 @@ fn consume(conn: DbConn) -> String {
         .execute(&*conn)
         .expect("Error saving new entry");
 
+
     let max_rank = fractals.select(diesel::dsl::max(rank))
         .first::<Option<i64>>(&*conn)
         .unwrap()
         .unwrap_or(1);
 
-    // FIXME: there has to be a way to do is thin one query
-    // TODO write SQL by hand?
-    for i in 2..=max_rank {
-        println!("{}", i);
-        diesel::update(
-                fractals.filter(rank.eq(i))
-            )
-            .set(rank.eq(rank - 1))
-            .execute(&*conn)
-            .expect("Error saving new entry: make space");
-    }
+    db_offset_rank(&conn, 2, max_rank, -1);
 
     f.json
 }
