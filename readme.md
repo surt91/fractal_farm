@@ -17,6 +17,8 @@ This should gather data to improve fractals via some optimization method.
 *   [x] for rating render in draft mode
 *   [x] create indices on consumed, rank, created_time
 *   [x] use bisection
+*   [x] genetic combination of transformations
+*   [ ] genetic mutation of transformations
 
 ## Setup the Database
 

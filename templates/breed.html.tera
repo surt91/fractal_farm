@@ -1,0 +1,102 @@
+{% extends "base" %}
+{% block title %}Genetik{% endblock title %}
+
+{% block content %}
+<div class="row">
+    <div class="col-sm">
+        <div class="img-holder">
+            <img id="mother" src="/draft/1/200/200">
+        </div>
+        <button type="button" class="btn btn-secondary" onclick="randomMother();">Zufall</button>
+    </div>
+    <div class="col-sm">
+        <div class="img-holder">
+            <img id="father" src="/draft/2/200/200">
+        </div>
+        <button type="button" class="btn btn-secondary" onclick="randomFather();">Zufall</button>
+    </div>
+</div>
+<div class="row">
+    <div class="col-sm">
+        <div class="img-holder">
+            <img id="child" src="/draft/3/512/512">
+        </div>
+        <button type="button" class="btn btn-secondary" onclick="combine();">Kreuzen</button>
+        <button type="button" class="btn btn-secondary" onclick="mutate();">Mutieren</button>
+        <button type="button" class="btn btn-success" onclick="rate();">Speichern und Bewerten</button>
+    </div>
+</div>
+
+<script>
+    var setPic = function(id, source) {
+        console.log(source);
+        document.getElementById(id).src = source;
+    }
+
+    var ids = {
+        "mother": "1",
+        "father": "2",
+        "child": "3",
+        "low": "1",
+        "high": "1"
+    };
+
+    var randomMother = function() {
+        getRandom("mother", 200);
+    }
+    var randomFather = function() {
+        getRandom("father", 200);
+    }
+
+    var getRandom = function(id, size) {
+        fetch("/random",
+        {
+            method: "GET",
+            headers: {
+                'Accept': 'text/plain',
+            },
+        })
+        .then(res => res.text())
+        .then(
+            res => {
+                var url = "/draft/" + res + "/" + size + "/" + size;
+                setPic(id, url);
+                ids[id] = res;
+            }
+        );
+    }
+
+    var combine = function() {
+        var id1 = ids["mother"];
+        var id2 = ids["father"];
+        fetch("/combine/" + id1 + "/" + id2,
+        {
+            method: "GET",
+            headers: {
+                'Accept': 'application/json',
+            },
+        })
+        .then(res => res.json())
+        .then(
+            res => {
+                var url = "/draft/" + res["id"] + "/512/512";
+                setPic("child", url);
+                ids["child"] = res["id"];
+                ids["low"] = res["low"];
+                ids["high"] = res["high"];
+            }
+        );
+    }
+
+    var rate = function() {
+        window.location.href = "/rate/" + ids["child"] + "/" + ids["high"] + "/" + ids["low"]
+    }
+
+    randomMother();
+    randomFather();
+    combine();
+</script>
+
+
+
+{% endblock content %}

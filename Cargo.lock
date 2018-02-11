@@ -1,7 +1,7 @@
 [[package]]
 name = "a_fractal_a_day"
 version = "0.1.0"
-source = "git+https://github.com/surt91/AFractalADay#4e0d50c068e3765f0e4ba449a137128962d8ccbd"
+source = "git+https://github.com/surt91/AFractalADay#de029a941dc2d3db32f6ab09de42726c5b9a23d9"
 dependencies = [
  "clap 2.29.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "itertools 0.7.6 (registry+https://github.com/rust-lang/crates.io-index)",

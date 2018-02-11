@@ -19,6 +19,7 @@
                     <h3 class="masthead-brand">Fractal Farm</h3>
                     <nav class="nav nav-masthead justify-content-center">
                         <a class="nav-link" href="/generate">Erstellen</a>
+                        <a class="nav-link" href="/breed">Genetik</a>
                         <a class="nav-link" href="/top">Bestenliste</a>
                         <a class="nav-link" href="/archive">Archiv</a>
                     </nav>

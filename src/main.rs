@@ -43,6 +43,7 @@ pub mod models;
 use db::DbConn;
 
 mod rating;
+mod genetic;
 
 const MAX: i64 = 100;
 
@@ -181,7 +182,6 @@ fn generate(conn: DbConn) -> Redirect {
 
     Redirect::to(&format!("/rate/{}/{}/{}", new_id, high, low))
 }
-
 
 #[get("/list")]
 fn list(conn: DbConn) -> QueryResult<Json<Vec<models::Fractal>>> {
@@ -372,7 +372,10 @@ fn main() {
                     rating::above,
                     rating::below,
                     editor,
-                    submit_json
+                    submit_json,
+                    genetic::combine,
+                    genetic::random,
+                    genetic::breed,
                 ]
             )
            .attach(Template::fairing())
