@@ -69,7 +69,4 @@
         .then(res => window.location.href = "/rate/" + res["id"] + "/" + res["high"] + "/" + res["low"]);
     }
 </script>
-
-
-
 {% endblock content %}
