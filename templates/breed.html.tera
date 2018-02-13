@@ -5,13 +5,13 @@
 <div class="row">
     <div class="col-sm">
         <div class="img-holder">
-            <img id="mother" src="/draft/1/200/200">
+            <img id="mother" width="{{ w/2 }}" height="{{ h/2 }}" src="/draft/1/{{ w/2 }}/{{ h/2 }}">
         </div>
         <button type="button" class="btn btn-secondary" onclick="randomMother();">Zufall</button>
     </div>
     <div class="col-sm">
         <div class="img-holder">
-            <img id="father" src="/draft/2/200/200">
+            <img id="father" width="{{ w/2 }}" height="{{ h/2 }}" src="/draft/2/{{ w/2 }}/{{ h/2 }}">
         </div>
         <button type="button" class="btn btn-secondary" onclick="randomFather();">Zufall</button>
     </div>
@@ -19,7 +19,7 @@
 <div class="row">
     <div class="col-sm">
         <div class="img-holder">
-            <img id="child" src="/draft/3/512/512">
+            <img id="child" width="{{ w }}" height="{{ h }}" src="/draft/3/{{ w }}/{{ h }}">
         </div>
         <button type="button" class="btn btn-secondary" onclick="combine();">Kreuzen</button>
         <button type="button" class="btn btn-secondary" onclick="mutate();">Mutieren</button>
@@ -42,10 +42,10 @@
     };
 
     var randomMother = function() {
-        getRandom("mother", 200);
+        getRandom("mother", {{ w/2 }});
     }
     var randomFather = function() {
-        getRandom("father", 200);
+        getRandom("father", {{ w/2 }});
     }
 
     var getRandom = function(id, size) {
@@ -79,7 +79,7 @@
         .then(res => res.json())
         .then(
             res => {
-                var url = "/draft/" + res["id"] + "/512/512";
+                var url = "/draft/" + res["id"] + "/{{ w }}/{{ h }}";
                 setPic("child", url);
                 ids["child"] = res["id"];
                 ids["low"] = res["low"];

@@ -12,7 +12,7 @@
                 ({{ j.id }})
             </p>
             <a href="/render/{{ j.id }}/1024/1024">
-                <img src="/render/{{ j.id }}/512/512">
+                <img src="/render/{{ j.id }}/{{ w }}/{{ h }}">
             </a>
         </div>
     {% endfor %}

@@ -1,3 +1,6 @@
+{% set w = 512 %}
+{% set h = 512 %}
+
 <!DOCTYPE html>
 <html>
     <head>

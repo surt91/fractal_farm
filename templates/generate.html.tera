@@ -7,7 +7,7 @@
 <div class="row">
     <div class="col-sm">
         <form action="/above" method="post">
-            <button class="img-button" name="candidate" value="{{ agressor }}"><img width="512" height="512" src="/draft/{{ agressor }}/512/512"></button>
+            <button class="img-button" name="candidate" value="{{ agressor }}"><img width="{{ w }}" height="{{ h }}" src="/draft/{{ agressor }}/{{ w }}/{{ h }}"></button>
             <input hidden name="pivot" value="{{ defender }}">
             <input hidden name="low" value="{{ low }}">
             <input hidden name="high" value="{{ high }}">
@@ -15,7 +15,7 @@
     </div>
     <div class="col-sm">
         <form action="/below" method="post">
-            <button class="img-button" name="pivot" value="{{ defender }}"><img width="512" height="512" src="/draft/{{ defender }}/512/512"></button>
+            <button class="img-button" name="pivot" value="{{ defender }}"><img width="{{ w }}" height="{{ h }}" src="/draft/{{ defender }}/{{ w }}/{{ h }}"></button>
             <input hidden name="candidate" value="{{ agressor }}">
             <input hidden name="low" value="{{ low }}">
             <input hidden name="high" value="{{ high }}">
