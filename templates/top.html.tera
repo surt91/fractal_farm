@@ -9,6 +9,7 @@
                 <a href="/json/{{ j.id }}">json</a>,
                 <a href="/rate/{{ j.id }}/1/{{ pngs | length }}">rerate</a>,
                 <a href="/editor/{{ j.id }}">edit</a>,
+                <a href="/delete/{{ j.id }}">delete</a>,
                 ({{ j.id }})
             </p>
             <a href="/render/{{ j.id }}/1024/1024">

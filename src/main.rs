@@ -300,6 +300,7 @@ fn top(conn: DbConn) -> Template {
     let pngs: Vec<Fractal> = fractals.order(fractals::rank.asc())
         .filter(rank.gt(0))
         .filter(consumed.eq(false))
+        .filter(deleted.eq(false))
         .limit(MAX)
         .load::<Fractal>(&*conn)
         .unwrap();
@@ -318,6 +319,7 @@ fn archive(conn: DbConn) -> Template {
 
     let pngs: Vec<Fractal> = fractals.order(fractals::created_time.asc())
         .filter(consumed.eq(true))
+        .filter(deleted.eq(false))
         .load::<Fractal>(&*conn)
         .unwrap();
 
@@ -325,6 +327,22 @@ fn archive(conn: DbConn) -> Template {
     context.insert("pngs", &pngs);
 
     Template::render("top", &context)
+}
+
+#[get("/delete/<id_in>")]
+fn delete(conn: DbConn, id_in: i64) -> Redirect {
+    use schema::fractals::dsl::*;
+
+    diesel::update(fractals.find(id_in))
+        .set((
+            deleted.eq(true),
+            deleted_time.eq(time::now_utc().to_timespec().sec as i64),
+            rank.eq::<Option<i64>>(None),
+        ))
+        .execute(&*conn)
+        .expect("Error deleting entry");
+
+    Redirect::to(&format!("/top"))
 }
 
 #[get("/editor/<id>")]

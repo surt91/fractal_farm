@@ -6,6 +6,8 @@ pub struct Fractal {
     pub created_time: i64,
     pub json: String,
     pub consumed: bool,
+    pub deleted: bool,
+    pub deleted_time: Option<i64>,
     pub rank: Option<i64>
 }
 
