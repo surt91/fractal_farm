@@ -391,6 +391,7 @@ fn main() {
                     consume,
                     archive,
                     generate,
+                    delete,
                     rating::rate,
                     rating::above,
                     rating::below,
