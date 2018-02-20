@@ -275,6 +275,7 @@ fn consume(conn: DbConn) -> String {
     diesel::update(fractals.find(f.id))
         .set((
             consumed.eq(true),
+            consumed_time.eq(time::now_utc().to_timespec().sec as i64),
             rank.eq::<Option<i64>>(None),
         ))
         .execute(&*conn)
@@ -317,7 +318,7 @@ fn archive(conn: DbConn) -> Template {
     use models::Fractal;
     use schema::fractals::dsl::*;
 
-    let pngs: Vec<Fractal> = fractals.order(fractals::created_time.asc())
+    let pngs: Vec<Fractal> = fractals.order(fractals::consumed_time.asc())
         .filter(consumed.eq(true))
         .filter(deleted.eq(false))
         .load::<Fractal>(&*conn)
