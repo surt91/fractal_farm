@@ -369,6 +369,12 @@ fn trash(conn: DbConn) -> Template {
 fn delete(conn: DbConn, id_in: i64) -> Redirect {
     use schema::fractals::dsl::*;
 
+    let rank_in = fractals.select(rank)
+        .find(id_in)
+        .first::<Option<i64>>(&*conn)
+        .expect("Can not find the rank")
+        .expect("rank is None");
+
     diesel::update(fractals.find(id_in))
         .set((
             deleted.eq(true),
@@ -377,6 +383,9 @@ fn delete(conn: DbConn, id_in: i64) -> Redirect {
         ))
         .execute(&*conn)
         .expect("Error deleting entry");
+
+    println!("deleted rank {}", rank_in);
+    db_convenience::offset_rank(&conn, rank_in, MAX, -1);
 
     Redirect::to(&format!("/top"))
 }
