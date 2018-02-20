@@ -335,7 +335,7 @@ fn archive(conn: DbConn) -> Template {
     use models::Fractal;
     use schema::fractals::dsl::*;
 
-    let pngs: Vec<Fractal> = fractals.order(fractals::consumed_time.asc())
+    let pngs: Vec<Fractal> = fractals.order(fractals::consumed_time.desc())
         .filter(consumed.eq(true))
         .filter(deleted.eq(false))
         .load::<Fractal>(&*conn)
@@ -353,7 +353,7 @@ fn trash(conn: DbConn) -> Template {
     use models::Fractal;
     use schema::fractals::dsl::*;
 
-    let pngs: Vec<Fractal> = fractals.order(fractals::deleted_time.asc())
+    let pngs: Vec<Fractal> = fractals.order(fractals::deleted_time.desc())
         .filter(consumed.eq(false))
         .filter(deleted.eq(true))
         .load::<Fractal>(&*conn)
