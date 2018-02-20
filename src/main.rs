@@ -170,6 +170,19 @@ fn add_fractal_to_db(conn: &DbConn, json: &str) -> (i64, i64, i64) {
     (new_id, high, low)
 }
 
+fn cleanup_db(conn: &DbConn) {
+    use schema::fractals;
+
+    diesel::delete(
+        fractals::table
+            .filter(fractals::consumed.eq(false))
+            .filter(fractals::deleted.eq(false))
+            .filter(fractals::rank.is_null())
+    )
+    .execute(&**conn)
+    .expect("Error cleaning up");
+}
+
 #[get("/")]
 fn index() -> Redirect {
     Redirect::to("/generate")
@@ -263,6 +276,10 @@ fn submit_json(conn: DbConn, json: String) -> Json<SubmitDetails> {
 fn consume(conn: DbConn) -> String {
     use models::Fractal;
     use schema::fractals::dsl::*;
+
+    // before we consume: clean up the database
+    // this is a good place, since it will be called regulary
+    cleanup_db(&conn);
 
     let f: Fractal = fractals
         .filter(rank.gt(0))
