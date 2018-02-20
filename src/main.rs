@@ -347,6 +347,24 @@ fn archive(conn: DbConn) -> Template {
     Template::render("top", &context)
 }
 
+#[get("/trash")]
+fn trash(conn: DbConn) -> Template {
+    use schema::fractals;
+    use models::Fractal;
+    use schema::fractals::dsl::*;
+
+    let pngs: Vec<Fractal> = fractals.order(fractals::deleted_time.asc())
+        .filter(consumed.eq(false))
+        .filter(deleted.eq(true))
+        .load::<Fractal>(&*conn)
+        .unwrap();
+
+    let mut context: HashMap<&str, &Vec<Fractal>> = HashMap::new();
+    context.insert("pngs", &pngs);
+
+    Template::render("top", &context)
+}
+
 #[get("/delete/<id_in>")]
 fn delete(conn: DbConn, id_in: i64) -> Redirect {
     use schema::fractals::dsl::*;
@@ -402,11 +420,12 @@ fn main() {
                     files,
                     list,
                     top,
+                    archive,
+                    trash,
                     render,
                     draft,
                     json,
                     consume,
-                    archive,
                     generate,
                     delete,
                     rating::rate,
