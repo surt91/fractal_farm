@@ -50,7 +50,7 @@
             body: JSON.stringify(json)
         })
         .then(res => res.json())
-        .then(res => setPic("/draft/" + res["id"] + "{{ w }}/{{ h }}"));
+        .then(res => setPic("/draft/" + res["id"] + "/{{ w }}/{{ h }}"));
     }
 
     var rate = function() {
