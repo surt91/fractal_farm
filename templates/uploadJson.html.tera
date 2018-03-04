@@ -1,0 +1,67 @@
+{% extends "base" %}
+{% block title %}Upload Json{% endblock title %}
+
+{% block head %}
+{% endblock head %}
+
+{% block content %}
+<div class="row">
+    <div class="col-sm">
+        <div class="img-holder">
+            <textarea id="editor" rows="20" cols="50">
+            </textarea>
+        </div>
+    </div>
+    <div class="col-sm">
+        <div class="img-holder">
+            <img id="pic" width="{{ w }}" height="{{ h }}">
+        </div>
+    </div>
+</div>
+
+<button type="button" class="btn btn-secondary" onclick="post();">Anwenden</button>
+<button type="button" class="btn btn-success" onclick="rate();">Speichern und Bewerten</button>
+
+<script>
+    var setPic = function(source) {
+        console.log(source);
+        document.getElementById("pic").src = source;
+    }
+
+    var post = function() {
+        var json = JSON.parse(document.getElementById("editor").value);
+
+        console.log(json);
+
+        fetch("/submitJson",
+        {
+            method: "POST",
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'text/plain',
+            },
+            body: JSON.stringify(json)
+        })
+        .then(res => res.json())
+        .then(res => setPic("/draft/" + res["id"] + "/{{ w }}/{{ h }}"));
+    }
+
+    var rate = function() {
+        var json = JSON.parse(document.getElementById("editor").value);
+
+        console.log(json);
+
+        fetch("/submitJson",
+        {
+            method: "POST",
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+            },
+            body: JSON.stringify(json)
+        })
+        .then(res => res.json())
+        .then(res => window.location.href = "/rate/" + res["id"] + "/" + res["high"] + "/" + res["low"]);
+    }
+</script>
+{% endblock content %}

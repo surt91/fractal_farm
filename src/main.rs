@@ -271,6 +271,12 @@ fn submit_json(conn: DbConn, json: String) -> Json<SubmitDetails> {
         }
     )
 }
+#[get("/submitJson")]
+fn upload_json() -> Template {
+    let context: HashMap<&str, &str> = HashMap::new();
+
+    Template::render("uploadJson", &context)
+}
 
 #[get("/consume")]
 fn consume(conn: DbConn) -> String {
@@ -442,6 +448,7 @@ fn main() {
                     rating::below,
                     editor,
                     submit_json,
+                    upload_json,
                     genetic::combine,
                     genetic::random,
                     genetic::breed,
