@@ -7,7 +7,7 @@ c = conn.cursor()
 c.execute('SELECT id, json FROM fractals')
 for i, json in c.fetchall():
     new_json = re.sub(
-        r'[0.0,0.0,0.0]',
+        r'\[0\.0,0\.0,0\.0\]',
         r'null',
         json
     )
