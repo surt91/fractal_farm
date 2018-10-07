@@ -1,6 +1,5 @@
 #![feature(plugin)]
 #![feature(custom_derive)]
-#![feature(inclusive_range_syntax)]
 #![plugin(rocket_codegen)]
 
 use std::collections::HashMap;
