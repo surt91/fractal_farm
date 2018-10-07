@@ -223,7 +223,8 @@ fn render(conn: DbConn, id: i64, width: u32, height: u32) -> Redirect {
     let dim = (width, height);
     let path = json2png(&f.json, dim);
     let path = path.to_str().unwrap();
-    Redirect::to(&format!("/{}", path))
+    let version = f.created_time;
+    Redirect::to(&format!("/{}?{}", path, version))
 }
 
 #[get("/draft/<id>/<width>/<height>")]
@@ -238,7 +239,8 @@ fn draft(conn: DbConn, id: i64, width: u32, height: u32) -> Redirect {
     let dim = (width, height);
     let path = json2draft(&f.json, dim);
     let path = path.to_str().unwrap();
-    Redirect::to(&format!("/{}", path))
+    let version = f.created_time;
+    Redirect::to(&format!("/{}?{}", path, version))
 }
 
 #[get("/json/<id>")]
