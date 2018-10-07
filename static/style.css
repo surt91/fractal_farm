@@ -10,6 +10,8 @@ code {
 img {
     max-width: 100%;
     padding: 0;
+    width: auto;
+    height: auto;
 }
 
 .img-button {
