@@ -103,10 +103,12 @@ fn json2draft(json: &str, dim: (u32, u32)) -> PathBuf {
 }
 
 fn generate_fractal(seed: usize) -> fractal::fractal::Fractal {
-    let fractal_type = if seed % 2 == 0 {
-        fractal::FractalType::MobiusFlame
-    } else {
-        fractal::FractalType::FractalFlame
+    let fractal_type = match seed % 4 {
+        0 => fractal::FractalType::MobiusFlame,
+        1 => fractal::FractalType::FractalFlame,
+        2 => fractal::FractalType::RandomLSystem,
+        3 => fractal::FractalType::Mandelbrot,
+        _ => unreachable!()
     };
 
     let fractal = fractal::fractal::FractalBuilder::new()
