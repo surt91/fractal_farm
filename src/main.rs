@@ -102,13 +102,17 @@ fn json2draft(json: &str, dim: (u32, u32)) -> PathBuf {
     path
 }
 
-fn generate_fractal(seed: usize) -> fractal::fractal::Fractal {
-    let fractal_type = match seed % 4 {
-        0 => fractal::FractalType::MobiusFlame,
-        1 => fractal::FractalType::FractalFlame,
-        2 => fractal::FractalType::RandomLSystem,
-        3 => fractal::FractalType::Mandelbrot,
-        _ => unreachable!()
+fn generate_fractal(seed: usize, name: Option<fractal::FractalType>) -> fractal::fractal::Fractal {
+    let fractal_type = match name {
+        Some(x) => x,
+        None => match seed % 5 {
+            0 => fractal::FractalType::MobiusFlame,
+            1 => fractal::FractalType::FractalFlame,
+            2 => fractal::FractalType::RandomLSystem,
+            3 => fractal::FractalType::Mandelbrot,
+            4 => fractal::FractalType::Newton,
+            _ => unreachable!()
+        }
     };
 
     let fractal = fractal::fractal::FractalBuilder::new()
@@ -191,9 +195,23 @@ fn index() -> Redirect {
 
 #[get("/generate")]
 fn generate(conn: DbConn) -> Redirect {
+    Redirect::to(&format!("/generate/random"))
+}
+
+#[get("/generate/<name>")]
+fn generate_specific(conn: DbConn, name: Option<String>) -> Redirect {
     let seed = time::now_utc().to_timespec().sec as usize;
 
-    let f = generate_fractal(seed);
+    let fractal_type = match name.as_ref().map(|s| s.as_str()) {
+        Some("newton") => Some(fractal::FractalType::Newton),
+        Some("mobius") => Some(fractal::FractalType::MobiusFlame),
+        Some("flame") => Some(fractal::FractalType::FractalFlame),
+        Some("lsys") => Some(fractal::FractalType::RandomLSystem),
+        Some("mandelbrot") => Some(fractal::FractalType::Mandelbrot),
+        None | Some(_) => None
+    };
+
+    let f = generate_fractal(seed, fractal_type);
     let json = f.json();
 
     let (new_id, high, low) = add_fractal_to_db(&conn, &json);
@@ -445,6 +463,7 @@ fn main() {
                     json,
                     consume,
                     generate,
+                    generate_specific,
                     delete,
                     rating::rate,
                     rating::above,

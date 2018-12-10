@@ -32,3 +32,27 @@ img {
 #jsoneditor {
     background-color: #eee;
 }
+
+ul.fractalList {
+  list-style-type: none;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  background-color: #333333;
+}
+
+ul.fractalList > li {
+  float: left;
+}
+
+ul.fractalList > li a {
+  display: block;
+  color: white;
+  text-align: center;
+  padding: 16px;
+  text-decoration: none;
+}
+
+ul.fractalList > li a:hover {
+  background-color: #111111;
+}
