@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use rocket_contrib::{Json,Template};
+use rocket_contrib::{json::Json,templates::Template};
 
 use diesel::prelude::*;
 
@@ -21,7 +21,7 @@ fn combine_fractals(
 }
 
 #[get("/combine/<id1>/<id2>")]
-fn combine(conn: DbConn, id1: i64, id2: i64) -> Json<SubmitDetails> {
+pub fn combine(conn: DbConn, id1: i64, id2: i64) -> Json<SubmitDetails> {
     use schema::fractals;
 
     // get the two fractals from database
@@ -51,7 +51,7 @@ fn combine(conn: DbConn, id1: i64, id2: i64) -> Json<SubmitDetails> {
 }
 
 #[get("/random")]
-fn random(conn: DbConn) -> String {
+pub fn random(conn: DbConn) -> String {
     use schema::fractals;
     use diesel::dsl::sql;
 
@@ -66,7 +66,7 @@ fn random(conn: DbConn) -> String {
 }
 
 #[get("/breed")]
-fn breed() -> Template {
+pub fn breed() -> Template {
     let context: HashMap<&str, &str> = HashMap::new();
 
     Template::render("breed", &context)

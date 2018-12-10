@@ -1,6 +1,7 @@
-#![feature(plugin)]
-#![feature(custom_derive)]
-#![plugin(rocket_codegen)]
+// for rocket
+#![feature(proc_macro_hygiene, decl_macro)]
+// for diesel
+#![feature(custom_attribute)]
 
 use std::collections::HashMap;
 
@@ -17,24 +18,23 @@ use dotenv::dotenv;
 extern crate a_fractal_a_day;
 use a_fractal_a_day as fractal;
 
-extern crate rocket;
+#[macro_use] extern crate rocket;
 use rocket::response::{NamedFile, Redirect, content};
-
-extern crate rocket_contrib;
-use rocket_contrib::{Json,Template};
 
 #[macro_use] extern crate diesel;
 use diesel::prelude::*;
 extern crate r2d2_diesel;
 extern crate r2d2;
-
-#[macro_use]
-extern crate serde_derive;
+#[macro_use] extern crate serde_derive;
 
 extern crate serde;
 extern crate serde_json;
 
 mod db;
+
+extern crate rocket_contrib;
+use rocket_contrib::{json::Json,templates::Template};
+
 mod db_convenience;
 pub mod schema;
 pub mod models;
@@ -190,12 +190,12 @@ fn cleanup_db(conn: &DbConn) {
 
 #[get("/")]
 fn index() -> Redirect {
-    Redirect::to("/generate")
+    Redirect::to(uri!(generate))
 }
 
 #[get("/generate")]
-fn generate(conn: DbConn) -> Redirect {
-    Redirect::to(&format!("/generate/random"))
+fn generate() -> Redirect {
+    Redirect::to(uri!(generate_specific: "random"))
 }
 
 #[get("/generate/<name>")]
@@ -216,7 +216,7 @@ fn generate_specific(conn: DbConn, name: Option<String>) -> Redirect {
 
     let (new_id, high, low) = add_fractal_to_db(&conn, &json);
 
-    Redirect::to(&format!("/rate/{}/{}/{}", new_id, high, low))
+    Redirect::to(uri!(rating::rate: new_id, high, low))
 }
 
 #[get("/list")]
@@ -242,8 +242,7 @@ fn render(conn: DbConn, id: i64, width: u32, height: u32) -> Redirect {
     let dim = (width, height);
     let path = json2png(&f.json, dim);
     let path = path.to_str().unwrap();
-    let version = f.created_time;
-    Redirect::to(&format!("/{}?{}", path, version))
+    Redirect::to(uri!(files: path))
 }
 
 #[get("/draft/<id>/<width>/<height>")]
@@ -258,8 +257,7 @@ fn draft(conn: DbConn, id: i64, width: u32, height: u32) -> Redirect {
     let dim = (width, height);
     let path = json2draft(&f.json, dim);
     let path = path.to_str().unwrap();
-    let version = f.created_time;
-    Redirect::to(&format!("/{}?{}", path, version))
+    Redirect::to(uri!(files: path))
 }
 
 #[get("/json/<id>")]
@@ -274,16 +272,38 @@ fn json(conn: DbConn, id: i64) -> Option<content::Json<String>> {
 }
 
 #[derive(Serialize)]
-struct SubmitDetails {
+pub struct SubmitDetails {
     pub id: i64,
     pub low: i64,
     pub high: i64,
 }
-#[post("/submitJson", data = "<json>")]
-fn submit_json(conn: DbConn, json: String) -> Json<SubmitDetails> {
-    add_fractal_to_db(&conn, &json);
 
-    let (id, high, low) = add_fractal_to_db(&conn, &json);
+struct JsonFractal {
+    data: String
+}
+
+// https://api.rocket.rs/v0.4/rocket/data/trait.FromDataSimple.html
+use std::io::Read;
+use rocket::{Request, Data, Outcome::*};
+use rocket::data::{self, FromDataSimple};
+use rocket::http::Status;
+const LIMIT: u64 = 1024*1024*5;
+impl FromDataSimple for JsonFractal {
+    type Error = String;
+
+    fn from_data(_req: &Request, data: Data) -> data::Outcome<Self, String> {
+        // Read the data into a String.
+        let mut string = String::new();
+        if let Err(e) = data.open().take(LIMIT).read_to_string(&mut string) {
+            return Failure((Status::InternalServerError, format!("{:?}", e)));
+        }
+        Success(JsonFractal { data: string })
+    }
+}
+
+#[post("/submitJson", data = "<json>")]
+fn submit_json(conn: DbConn, json: JsonFractal) -> Json<SubmitDetails> {
+    let (id, high, low) = add_fractal_to_db(&conn, &json.data);
     Json(
         SubmitDetails {
             id,
@@ -414,7 +434,7 @@ fn delete(conn: DbConn, id_in: i64) -> Redirect {
     println!("deleted rank {}", rank_in);
     db_convenience::offset_rank(&conn, rank_in, MAX, -1);
 
-    Redirect::to(&format!("/top"))
+    Redirect::to(uri!(top))
 }
 
 #[get("/editor/<id>")]

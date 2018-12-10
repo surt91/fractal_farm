@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use rocket::response::Redirect;
 use rocket::request::Form;
-use rocket_contrib::Template;
+use rocket_contrib::templates::Template;
 
 use super::diesel;
 use diesel::prelude::*;
@@ -56,10 +56,10 @@ pub struct DuelResult {
 pub fn below(conn: DbConn, result: Form<DuelResult>) -> Redirect {
     use schema::fractals;
 
-    let pivot = result.get().pivot;
-    let candidate = result.get().candidate;
-    // let high = result.get().high;
-    let low = result.get().low;
+    let pivot = result.pivot;
+    let candidate = result.candidate;
+    // let high = result.high;
+    let low = result.low;
 
     // the first time, we look at the same thing
     // so assign it rank 1 and generate the next one
@@ -124,7 +124,7 @@ pub fn below(conn: DbConn, result: Form<DuelResult>) -> Redirect {
     if high == low {
         Redirect::to("/generate")
     } else {
-        Redirect::to(&format!("/rate/{}/{}/{}", candidate, high, low))
+        Redirect::to(uri!(rate: candidate, high, low))
     }
 }
 
@@ -132,10 +132,10 @@ pub fn below(conn: DbConn, result: Form<DuelResult>) -> Redirect {
 pub fn above(conn: DbConn, result: Form<DuelResult>) -> Redirect {
     use schema::fractals;
 
-    let pivot = result.get().pivot;
-    let candidate = result.get().candidate;
-    let high = result.get().high;
-    // let low = result.get().low;
+    let pivot = result.pivot;
+    let candidate = result.candidate;
+    let high = result.high;
+    // let low = result.low;
 
     // the first time, we look at the same thing
     // so assign it rank 1 and generate the next one
@@ -194,6 +194,6 @@ pub fn above(conn: DbConn, result: Form<DuelResult>) -> Redirect {
     if high == low {
         Redirect::to("/generate")
     } else {
-        Redirect::to(&format!("/rate/{}/{}/{}", candidate, high, low))
+        Redirect::to(uri!(rate: candidate, high, low))
     }
 }
