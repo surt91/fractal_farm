@@ -19,6 +19,9 @@
             <a href="/generate/mobius">Moebius Flame</a>
         </li>
         <li>
+            <a href="/generate/qmap">Quadratic Map</a>
+        </li>
+        <li>
             <a href="/generate/lsys">L-System</a>
         </li>
     </ul>

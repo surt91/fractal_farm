@@ -103,23 +103,19 @@ fn json2draft(json: &str, dim: (u32, u32)) -> PathBuf {
 fn generate_fractal(seed: usize, name: Option<fractal::FractalType>) -> fractal::fractal::Fractal {
     let fractal_type = match name {
         Some(x) => x,
-        None => match seed % 5 {
+        None => match seed % 6 {
             0 => fractal::FractalType::MobiusFlame,
             1 => fractal::FractalType::FractalFlame,
             2 => fractal::FractalType::RandomLSystem,
             3 => fractal::FractalType::Mandelbrot,
             4 => fractal::FractalType::Newton,
+            5 => fractal::FractalType::QuadraticMap,
             _ => unreachable!()
         }
     };
 
     let fractal = fractal::fractal::FractalBuilder::new()
         .seed(seed)
-        .style(&None)
-        .variation(&None)
-        .symmetry(&None)
-        .vibrancy(&None)
-        .gamma(&None)
         .build(&fractal_type);
 
     fractal
@@ -204,6 +200,7 @@ fn generate_specific(conn: DbConn, name: Option<String>) -> Redirect {
         Some("newton") => Some(fractal::FractalType::Newton),
         Some("mobius") => Some(fractal::FractalType::MobiusFlame),
         Some("flame") => Some(fractal::FractalType::FractalFlame),
+        Some("qmap") => Some(fractal::FractalType::QuadraticMap),
         Some("lsys") => Some(fractal::FractalType::RandomLSystem),
         Some("mandelbrot") => Some(fractal::FractalType::Mandelbrot),
         None | Some(_) => None
