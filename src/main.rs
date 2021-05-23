@@ -1,7 +1,5 @@
 // for rocket
 #![feature(proc_macro_hygiene, decl_macro)]
-// for diesel
-#![feature(custom_attribute)]
 
 use std::collections::HashMap;
 
