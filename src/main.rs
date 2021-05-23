@@ -114,9 +114,16 @@ fn generate_fractal(seed: usize, name: Option<fractal::FractalType>) -> fractal:
         }
     };
 
-    let fractal = fractal::fractal::FractalBuilder::new()
-        .seed(seed)
-        .build(&fractal_type);
+    let fractal = loop {
+        let mut f = fractal::fractal::FractalBuilder::new()
+            .seed(seed)
+            .build(&fractal_type);
+
+        // try to generate an interesting fractal
+        if f.estimate_quality_before() {
+            break f
+        }
+    };
 
     fractal
 }
