@@ -114,11 +114,13 @@ fn generate_fractal(seed: usize, name: Option<fractal::FractalType>) -> fractal:
         }
     };
 
+    let mut ctr = 0;
     let fractal = loop {
         let mut f = fractal::fractal::FractalBuilder::new()
-            .seed(seed)
+            .seed(seed + ctr)
             .build(&fractal_type);
 
+        ctr += 1;
         // try to generate an interesting fractal
         if f.estimate_quality_before() {
             break f
