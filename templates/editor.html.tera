@@ -25,7 +25,9 @@
 <script>
     // create the editor
     var container = document.getElementById("jsoneditor");
-    var options = {};
+    var options = {
+        modes: ["tree", "code", "text"]
+    };
     var editor = new JSONEditor(container, options);
 
     // set json
