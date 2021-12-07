@@ -38,3 +38,9 @@ docker build . -t farm
 mkdir -p db  # create dir for the database
 docker run -v $PWD/db:/db -p 7878:7878 farm
 ```
+
+Or using `docker-compose`
+
+```bash
+docker-compose up
+```
