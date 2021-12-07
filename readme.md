@@ -28,3 +28,13 @@ cargo install diesel_cli
 diesel setup
 diesel migration run
 ```
+
+## Using Docker
+
+Build it and run it with
+
+```bash
+docker build . -t farm
+mkdir -p db  # create dir for the database
+docker run -v $PWD/db:/db -p 7878:7878 farm
+```
