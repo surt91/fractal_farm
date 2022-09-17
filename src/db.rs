@@ -4,9 +4,9 @@ use std::env;
 
 use super::r2d2;
 use diesel::sqlite::SqliteConnection;
-use r2d2_diesel::ConnectionManager;
+use diesel::r2d2::ConnectionManager;
 
-use std::ops::Deref;
+use std::ops::{Deref, DerefMut};
 use rocket::http::Status;
 use rocket::request::{self, FromRequest};
 use rocket::{Request, State, Outcome};
@@ -47,5 +47,13 @@ impl Deref for DbConn {
 
     fn deref(&self) -> &Self::Target {
         &self.0
+    }
+}
+
+
+// For the convenience of using an &DbConn as an &SqliteConnection.
+impl DerefMut for DbConn {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
     }
 }

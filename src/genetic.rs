@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use diesel::sql_types::Numeric;
 use rocket_contrib::{json::Json,templates::Template};
 
 use diesel::prelude::*;
@@ -21,17 +22,17 @@ fn combine_fractals(
 }
 
 #[get("/combine/<id1>/<id2>")]
-pub fn combine(conn: DbConn, id1: i64, id2: i64) -> Json<SubmitDetails> {
+pub fn combine(mut conn: DbConn, id1: i64, id2: i64) -> Json<SubmitDetails> {
     use schema::fractals;
 
     // get the two fractals from database
     let json1 = fractals::table.select(fractals::json)
         .find(id1)
-        .first::<String>(&*conn)
+        .first::<String>(&mut *conn)
         .unwrap();
     let json2 = fractals::table.select(fractals::json)
         .find(id2)
-        .first::<String>(&*conn)
+        .first::<String>(&mut *conn)
         .unwrap();
 
     let f1 = json2fractal(&json1);
@@ -39,7 +40,7 @@ pub fn combine(conn: DbConn, id1: i64, id2: i64) -> Json<SubmitDetails> {
 
     let f = combine_fractals(&f1, &f2);
 
-    let (id, high, low) = add_fractal_to_db(&conn, &f.json());
+    let (id, high, low) = add_fractal_to_db(&mut conn, &f.json());
 
     Json(
         SubmitDetails {
@@ -51,15 +52,15 @@ pub fn combine(conn: DbConn, id1: i64, id2: i64) -> Json<SubmitDetails> {
 }
 
 #[get("/random")]
-pub fn random(conn: DbConn) -> String {
+pub fn random(mut conn: DbConn) -> String {
     use schema::fractals;
     use diesel::dsl::sql;
 
     let id = fractals::table.select(fractals::id)
         .filter(fractals::rank.gt(0))
         .limit(1)
-        .order(sql::<i64>("RANDOM()"))
-        .first::<i64>(&*conn)
+        .order(sql::<Numeric>("RANDOM()"))
+        .first::<i64>(&mut *conn)
         .expect("Error getting random fractals");
 
     format!("{}", id)

@@ -13,7 +13,7 @@ pub struct Fractal {
 }
 
 #[derive(Insertable, FromForm, Debug)]
-#[table_name="fractals"]
+#[diesel(table_name = fractals)]
 pub struct NewFractal {
     pub json: String,
     pub rank: Option<i64>,

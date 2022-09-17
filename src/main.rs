@@ -21,7 +21,6 @@ use rocket::response::{NamedFile, Redirect, content};
 
 #[macro_use] extern crate diesel;
 use diesel::prelude::*;
-extern crate r2d2_diesel;
 extern crate r2d2;
 #[macro_use] extern crate serde_derive;
 
@@ -130,14 +129,14 @@ fn generate_fractal(seed: usize, name: Option<fractal::FractalType>) -> fractal:
     fractal
 }
 
-fn add_fractal_to_db(conn: &DbConn, json: &str) -> (i64, i64, i64) {
+fn add_fractal_to_db(conn: &mut DbConn, json: &str) -> (i64, i64, i64) {
     use models::Fractal;
     use schema::fractals;
 
     // special case of empty database, add this fractal with rank 1
     if let None = fractals::table.order(fractals::rank.desc())
         .filter(fractals::rank.le(MAX))
-        .first::<Fractal>(&**conn)
+        .first::<Fractal>(&mut **conn)
         .ok()
     {
         let first = models::NewFractal {
@@ -147,7 +146,7 @@ fn add_fractal_to_db(conn: &DbConn, json: &str) -> (i64, i64, i64) {
 
         diesel::insert_into(fractals::table)
             .values(&first)
-            .execute(&**conn)
+            .execute(&mut **conn)
             .expect("Error saving new entry");
     }
 
@@ -158,27 +157,27 @@ fn add_fractal_to_db(conn: &DbConn, json: &str) -> (i64, i64, i64) {
 
     diesel::insert_into(fractals::table)
         .values(&new_fractal)
-        .execute(&**conn)
+        .execute(&mut **conn)
         .expect("Error saving new entry");
 
     let new_id = fractals::table.select(fractals::id)
         .order(fractals::created_time.desc())
-        .first::<i64>(&**conn)
+        .first::<i64>(&mut **conn)
         .expect("Can not find first entry I just saved");
 
     let high = fractals::table.select(diesel::dsl::min(fractals::rank))
-        .first::<Option<i64>>(&**conn)
+        .first::<Option<i64>>(&mut **conn)
         .unwrap()
         .unwrap_or(1);
     let low = fractals::table.select(diesel::dsl::max(fractals::rank))
-        .first::<Option<i64>>(&**conn)
+        .first::<Option<i64>>(&mut **conn)
         .unwrap()
         .unwrap_or(1);
 
     (new_id, high, low)
 }
 
-fn cleanup_db(conn: &DbConn) {
+fn cleanup_db(conn: &mut DbConn) {
     use schema::fractals;
 
     diesel::delete(
@@ -187,7 +186,7 @@ fn cleanup_db(conn: &DbConn) {
             .filter(fractals::deleted.eq(false))
             .filter(fractals::rank.is_null())
     )
-    .execute(&**conn)
+    .execute(&mut **conn)
     .expect("Error cleaning up");
 }
 
@@ -202,7 +201,7 @@ fn generate() -> Redirect {
 }
 
 #[get("/generate/<name>")]
-fn generate_specific(conn: DbConn, name: Option<String>) -> Redirect {
+fn generate_specific(mut conn: DbConn, name: Option<String>) -> Redirect {
     let seed = time::now_utc().to_timespec().sec as usize;
 
     let fractal_type = match name.as_ref().map(|s| s.as_str()) {
@@ -218,29 +217,29 @@ fn generate_specific(conn: DbConn, name: Option<String>) -> Redirect {
     let f = generate_fractal(seed, fractal_type);
     let json = f.json();
 
-    let (new_id, high, low) = add_fractal_to_db(&conn, &json);
+    let (new_id, high, low) = add_fractal_to_db(&mut conn, &json);
 
     Redirect::to(uri!(rating::rate: new_id, high, low))
 }
 
 #[get("/list")]
-fn list(conn: DbConn) -> QueryResult<Json<Vec<models::Fractal>>> {
+fn list(mut conn: DbConn) -> QueryResult<Json<Vec<models::Fractal>>> {
     use schema::fractals::dsl::*;
     use schema::fractals;
     use models::Fractal;
 
     fractals.order(fractals::id.desc())
-        .load::<Fractal>(&*conn)
+        .load::<Fractal>(&mut *conn)
         .map(|x| Json(x))
 }
 
 #[get("/render/<id>/<width>/<height>")]
-fn render(conn: DbConn, id: i64, width: u32, height: u32) -> Redirect {
+fn render(mut conn: DbConn, id: i64, width: u32, height: u32) -> Redirect {
     use models::Fractal;
     use schema::fractals;
 
     let f: Fractal = fractals::table.find(id)
-        .first::<Fractal>(&*conn)
+        .first::<Fractal>(&mut *conn)
         .unwrap();
 
     let dim = (width, height);
@@ -250,12 +249,12 @@ fn render(conn: DbConn, id: i64, width: u32, height: u32) -> Redirect {
 }
 
 #[get("/draft/<id>/<width>/<height>")]
-fn draft(conn: DbConn, id: i64, width: u32, height: u32) -> Redirect {
+fn draft(mut conn: DbConn, id: i64, width: u32, height: u32) -> Redirect {
     use models::Fractal;
     use schema::fractals;
 
     let f: Fractal = fractals::table.find(id)
-        .first::<Fractal>(&*conn)
+        .first::<Fractal>(&mut *conn)
         .unwrap();
 
     let dim = (width, height);
@@ -265,12 +264,12 @@ fn draft(conn: DbConn, id: i64, width: u32, height: u32) -> Redirect {
 }
 
 #[get("/json/<id>")]
-fn json(conn: DbConn, id: i64) -> Option<content::Json<String>> {
+fn json(mut conn: DbConn, id: i64) -> Option<content::Json<String>> {
     use schema::fractals;
 
     fractals::table.select(fractals::json)
         .find(id)
-        .first::<String>(&*conn)
+        .first::<String>(&mut *conn)
         .ok()
         .and_then(|x| Some(content::Json(x)))
 }
@@ -306,8 +305,8 @@ impl FromDataSimple for JsonFractal {
 }
 
 #[post("/submitJson", data = "<json>")]
-fn submit_json(conn: DbConn, json: JsonFractal) -> Json<SubmitDetails> {
-    let (id, high, low) = add_fractal_to_db(&conn, &json.data);
+fn submit_json(mut conn: DbConn, json: JsonFractal) -> Json<SubmitDetails> {
+    let (id, high, low) = add_fractal_to_db(&mut conn, &json.data);
     Json(
         SubmitDetails {
             id,
@@ -324,19 +323,19 @@ fn upload_json() -> Template {
 }
 
 #[get("/consume")]
-fn consume(conn: DbConn) -> String {
+fn consume(mut conn: DbConn) -> String {
     use models::Fractal;
     use schema::fractals::dsl::*;
 
     // before we consume: clean up the database
     // this is a good place, since it will be called regulary
-    cleanup_db(&conn);
+    cleanup_db(&mut conn);
 
     let f: Fractal = fractals
         .filter(rank.gt(0))
         .filter(consumed.eq(false))
         .order(rank.asc())
-        .first::<Fractal>(&*conn)
+        .first::<Fractal>(&mut *conn)
         .unwrap();
     // FIXME: if all fractals are consumed: handel the error
 
@@ -346,22 +345,22 @@ fn consume(conn: DbConn) -> String {
             consumed_time.eq(time::now_utc().to_timespec().sec as i64),
             rank.eq::<Option<i64>>(None),
         ))
-        .execute(&*conn)
+        .execute(&mut *conn)
         .expect("Error saving new entry");
 
 
     let max_rank = fractals.select(diesel::dsl::max(rank))
-        .first::<Option<i64>>(&*conn)
+        .first::<Option<i64>>(&mut *conn)
         .unwrap()
         .unwrap_or(1);
 
-    db_convenience::offset_rank(&conn, 2, max_rank, -1);
+    db_convenience::offset_rank(&mut conn, 2, max_rank, -1);
 
     f.json
 }
 
 #[get("/top")]
-fn top(conn: DbConn) -> Template {
+fn top(mut conn: DbConn) -> Template {
     use schema::fractals;
     use models::Fractal;
     use schema::fractals::dsl::*;
@@ -371,7 +370,7 @@ fn top(conn: DbConn) -> Template {
         .filter(consumed.eq(false))
         .filter(deleted.eq(false))
         .limit(MAX)
-        .load::<Fractal>(&*conn)
+        .load::<Fractal>(&mut *conn)
         .unwrap();
 
     let mut context: HashMap<&str, &Vec<Fractal>> = HashMap::new();
@@ -381,7 +380,7 @@ fn top(conn: DbConn) -> Template {
 }
 
 #[get("/archive")]
-fn archive(conn: DbConn) -> Template {
+fn archive(mut conn: DbConn) -> Template {
     use schema::fractals;
     use models::Fractal;
     use schema::fractals::dsl::*;
@@ -389,7 +388,7 @@ fn archive(conn: DbConn) -> Template {
     let pngs: Vec<Fractal> = fractals.order(fractals::consumed_time.desc())
         .filter(consumed.eq(true))
         .filter(deleted.eq(false))
-        .load::<Fractal>(&*conn)
+        .load::<Fractal>(&mut *conn)
         .unwrap();
 
     let mut context: HashMap<&str, &Vec<Fractal>> = HashMap::new();
@@ -399,7 +398,7 @@ fn archive(conn: DbConn) -> Template {
 }
 
 #[get("/trash")]
-fn trash(conn: DbConn) -> Template {
+fn trash(mut conn: DbConn) -> Template {
     use schema::fractals;
     use models::Fractal;
     use schema::fractals::dsl::*;
@@ -407,7 +406,7 @@ fn trash(conn: DbConn) -> Template {
     let pngs: Vec<Fractal> = fractals.order(fractals::deleted_time.desc())
         .filter(consumed.eq(false))
         .filter(deleted.eq(true))
-        .load::<Fractal>(&*conn)
+        .load::<Fractal>(&mut *conn)
         .unwrap();
 
     let mut context: HashMap<&str, &Vec<Fractal>> = HashMap::new();
@@ -417,12 +416,12 @@ fn trash(conn: DbConn) -> Template {
 }
 
 #[get("/delete/<id_in>")]
-fn delete(conn: DbConn, id_in: i64) -> Redirect {
+fn delete(mut conn: DbConn, id_in: i64) -> Redirect {
     use schema::fractals::dsl::*;
 
     let rank_in = fractals.select(rank)
         .find(id_in)
-        .first::<Option<i64>>(&*conn)
+        .first::<Option<i64>>(&mut *conn)
         .expect("Can not find the rank")
         .expect("rank is None");
 
@@ -432,22 +431,22 @@ fn delete(conn: DbConn, id_in: i64) -> Redirect {
             deleted_time.eq(time::now_utc().to_timespec().sec as i64),
             rank.eq::<Option<i64>>(None),
         ))
-        .execute(&*conn)
+        .execute(&mut *conn)
         .expect("Error deleting entry");
 
     println!("deleted rank {}", rank_in);
-    db_convenience::offset_rank(&conn, rank_in, MAX, -1);
+    db_convenience::offset_rank(&mut conn, rank_in, MAX, -1);
 
     Redirect::to(uri!(top))
 }
 
 #[get("/editor/<id>")]
-fn editor(conn: DbConn, id: i64) -> Option<Template> {
+fn editor(mut conn: DbConn, id: i64) -> Option<Template> {
     use schema::fractals;
 
     let json = fractals::table.select(fractals::json)
         .find(id)
-        .first::<String>(&*conn)
+        .first::<String>(&mut *conn)
         .ok();
 
     let id_str = format!("{}", id);

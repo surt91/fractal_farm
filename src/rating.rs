@@ -13,12 +13,12 @@ use super::db_convenience;
 use super::MAX;
 
 #[get("/rate/<id>/<high>/<low>")]
-pub fn rate(conn: DbConn, id: i64, high: i64, low: i64) -> Template {
+pub fn rate(mut conn: DbConn, id: i64, high: i64, low: i64) -> Template {
     use schema::fractals;
 
     let candidate_rank = fractals::table.select(fractals::rank)
         .find(id)
-        .first::<Option<i64>>(&*conn)
+        .first::<Option<i64>>(&mut *conn)
         .unwrap();
 
     // if the candidate is new (no rank) start with the worst ranked fractal
@@ -32,7 +32,7 @@ pub fn rate(conn: DbConn, id: i64, high: i64, low: i64) -> Template {
     println!("opp rank {}", opponent_rank);
     let pivot_id = fractals::table.select(fractals::id)
         .filter(fractals::rank.eq(opponent_rank))
-        .first::<i64>(&*conn)
+        .first::<i64>(&mut *conn)
         .expect("the requested rank does not exist");
 
     let mut context: HashMap<&str, i64> = HashMap::new();
@@ -53,7 +53,7 @@ pub struct DuelResult {
 }
 
 #[post("/below", data = "<result>")]
-pub fn below(conn: DbConn, result: Form<DuelResult>) -> Redirect {
+pub fn below(mut conn: DbConn, result: Form<DuelResult>) -> Redirect {
     use schema::fractals;
 
     let pivot = result.pivot;
@@ -66,7 +66,7 @@ pub fn below(conn: DbConn, result: Form<DuelResult>) -> Redirect {
     if pivot == candidate {
         diesel::update(fractals::table.find(candidate))
             .set(fractals::rank.eq(1))
-            .execute(&*conn)
+            .execute(&mut *conn)
             .expect("Error saving new entry: winner -> up");
 
         return Redirect::to("/generate")
@@ -74,13 +74,13 @@ pub fn below(conn: DbConn, result: Form<DuelResult>) -> Redirect {
 
     let pivot_rank = fractals::table.select(fractals::rank)
         .find(pivot)
-        .first::<Option<i64>>(&*conn)
+        .first::<Option<i64>>(&mut *conn)
         .unwrap()
         .unwrap_or(1);
 
     let candidate_rank = fractals::table.select(fractals::rank)
         .find(candidate)
-        .first::<Option<i64>>(&*conn)
+        .first::<Option<i64>>(&mut *conn)
         .unwrap()
         .unwrap_or(MAX + 1);
 
@@ -91,7 +91,7 @@ pub fn below(conn: DbConn, result: Form<DuelResult>) -> Redirect {
     if pivot_rank == MAX || candidate_rank == MAX + 1 {
         // remove candidate from database
         diesel::delete(fractals::table.find(candidate))
-            .execute(&*conn)
+            .execute(&mut *conn)
             .expect("Error deleting posts");
 
         return Redirect::to("/generate")
@@ -101,21 +101,21 @@ pub fn below(conn: DbConn, result: Form<DuelResult>) -> Redirect {
         // set the candidate rank to NULL
         diesel::update(fractals::table.find(candidate))
             .set(fractals::rank.eq::<Option<i64>>(None))
-            .execute(&*conn)
+            .execute(&mut *conn)
             .expect("Error saving new entry: winner -> null");
 
-        db_convenience::offset_rank(&conn, pivot_rank, candidate_rank, -1);
+        db_convenience::offset_rank(&mut conn, pivot_rank, candidate_rank, -1);
 
         // insert candidate into the empty spot of the pivot
         diesel::update(fractals::table.find(candidate))
             .set(fractals::rank.eq(pivot_rank))
-            .execute(&*conn)
+            .execute(&mut *conn)
             .expect("Error saving new entry: winner -> pivot");
 
         // limit to MAX
         diesel::update(fractals::table.filter(fractals::rank.gt(MAX)))
             .set(fractals::rank.eq::<Option<i64>>(None))
-            .execute(&*conn)
+            .execute(&mut *conn)
             .expect("Error saving new entry: limit to MAX");
     }
 
@@ -129,7 +129,7 @@ pub fn below(conn: DbConn, result: Form<DuelResult>) -> Redirect {
 }
 
 #[post("/above", data = "<result>")]
-pub fn above(conn: DbConn, result: Form<DuelResult>) -> Redirect {
+pub fn above(mut conn: DbConn, result: Form<DuelResult>) -> Redirect {
     use schema::fractals;
 
     let pivot = result.pivot;
@@ -142,7 +142,7 @@ pub fn above(conn: DbConn, result: Form<DuelResult>) -> Redirect {
     if pivot == candidate {
         diesel::update(fractals::table.find(candidate))
             .set(fractals::rank.eq(1))
-            .execute(&*conn)
+            .execute(&mut *conn)
             .expect("Error saving new entry: winner -> up");
 
         return Redirect::to("/generate")
@@ -153,13 +153,13 @@ pub fn above(conn: DbConn, result: Form<DuelResult>) -> Redirect {
 
     let pivot_rank = fractals::table.select(fractals::rank)
         .find(pivot)
-        .first::<Option<i64>>(&*conn)
+        .first::<Option<i64>>(&mut *conn)
         .expect("abve: Can not find pivot")
         .unwrap();
 
     let candidate_rank = fractals::table.select(fractals::rank)
         .find(candidate)
-        .first::<Option<i64>>(&*conn)
+        .first::<Option<i64>>(&mut *conn)
         .expect("abve: Can not find candidate")
         .unwrap_or(MAX + 1);
 
@@ -170,21 +170,21 @@ pub fn above(conn: DbConn, result: Form<DuelResult>) -> Redirect {
         // set the candidate rank to NULL
         diesel::update(fractals::table.find(candidate))
             .set(fractals::rank.eq::<Option<i64>>(None))
-            .execute(&*conn)
+            .execute(&mut *conn)
             .expect("Error saving new entry: winner -> null");
 
-        db_convenience::offset_rank(&conn, pivot_rank, candidate_rank, 1);
+        db_convenience::offset_rank(&mut conn, pivot_rank, candidate_rank, 1);
 
         // insert candidate into the empty spot of the pivot
         diesel::update(fractals::table.find(candidate))
             .set(fractals::rank.eq(pivot_rank))
-            .execute(&*conn)
+            .execute(&mut *conn)
             .expect("Error saving new entry: winner -> pivot");
 
         // limit to MAX
         diesel::update(fractals::table.filter(fractals::rank.gt(MAX)))
             .set(fractals::rank.eq::<Option<i64>>(None))
-            .execute(&*conn)
+            .execute(&mut *conn)
             .expect("Error saving new entry: limit to MAX");
     }
 
