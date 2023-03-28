@@ -202,7 +202,7 @@ fn generate() -> Redirect {
 
 #[get("/generate/<name>")]
 fn generate_specific(mut conn: DbConn, name: Option<String>) -> Redirect {
-    let seed = time::now_utc().to_timespec().sec as usize;
+    let seed = time::OffsetDateTime::now_utc().unix_timestamp_nanos() as usize;
 
     let fractal_type = match name.as_ref().map(|s| s.as_str()) {
         Some("newton") => Some(fractal::FractalType::Newton),
@@ -342,7 +342,7 @@ fn consume(mut conn: DbConn) -> String {
     diesel::update(fractals.find(f.id))
         .set((
             consumed.eq(true),
-            consumed_time.eq(time::now_utc().to_timespec().sec as i64),
+            consumed_time.eq(time::OffsetDateTime::now_utc().unix_timestamp()),
             rank.eq::<Option<i64>>(None),
         ))
         .execute(&mut *conn)
@@ -428,7 +428,7 @@ fn delete(mut conn: DbConn, id_in: i64) -> Redirect {
     diesel::update(fractals.find(id_in))
         .set((
             deleted.eq(true),
-            deleted_time.eq(time::now_utc().to_timespec().sec as i64),
+            deleted_time.eq(time::OffsetDateTime::now_utc().unix_timestamp()),
             rank.eq::<Option<i64>>(None),
         ))
         .execute(&mut *conn)
