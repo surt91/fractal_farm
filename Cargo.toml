@@ -10,7 +10,7 @@ rocket = "0.4"
 rocket_contrib = { version = "0.4", features = ["tera_templates"] }
 
 r2d2 = "0.8"
-diesel = { version = "2.0", features = ["sqlite", "r2d2"] }
+diesel = { version = "2.2", features = ["sqlite", "r2d2"] }
 dotenv = "0.13"
 
 serde = "1.0"
