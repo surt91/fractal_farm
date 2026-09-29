@@ -1,16 +1,22 @@
 use std::collections::HashMap;
 
+use std::sync::Arc;
+
+use axum::extract::{Path, State};
+use axum::http::StatusCode;
+use axum::response::Html;
+use axum::Json;
 use diesel::sql_types::Numeric;
-use rocket_contrib::{json::Json,templates::Template};
 
 use diesel::prelude::*;
 
-use super::db::DbConn;
+use crate::db::DbConn;
 
-use super::a_fractal_a_day as fractal;
-use super::json2fractal;
-use super::add_fractal_to_db;
-use super::SubmitDetails;
+use crate::fractal;
+use crate::json2fractal;
+use crate::add_fractal_to_db;
+use crate::SubmitDetails;
+use crate::{blocking, render_template};
 
 fn combine_fractals(
     f1: &fractal::fractal::Fractal,
@@ -21,9 +27,9 @@ fn combine_fractals(
     f1.combine(f2).expect("failed combining")
 }
 
-#[get("/combine/<id1>/<id2>")]
-pub fn combine(mut conn: DbConn, id1: i64, id2: i64) -> Json<SubmitDetails> {
-    use schema::fractals;
+pub async fn combine(mut conn: DbConn, Path((id1, id2)): Path<(i64, i64)>) -> Result<Json<SubmitDetails>, StatusCode> {
+    blocking(move || {
+    use crate::schema::fractals;
 
     // get the two fractals from database
     let json1 = fractals::table.select(fractals::json)
@@ -49,11 +55,12 @@ pub fn combine(mut conn: DbConn, id1: i64, id2: i64) -> Json<SubmitDetails> {
             high
         }
     )
+    }).await
 }
 
-#[get("/random")]
-pub fn random(mut conn: DbConn) -> String {
-    use schema::fractals;
+pub async fn random(mut conn: DbConn) -> Result<String, StatusCode> {
+    blocking(move || {
+    use crate::schema::fractals;
     use diesel::dsl::sql;
 
     let id = fractals::table.select(fractals::id)
@@ -64,11 +71,11 @@ pub fn random(mut conn: DbConn) -> String {
         .expect("Error getting random fractals");
 
     format!("{}", id)
+    }).await
 }
 
-#[get("/breed")]
-pub fn breed() -> Template {
+pub async fn breed(State(tera): State<Arc<tera::Tera>>) -> Result<Html<String>, StatusCode> {
     let context: HashMap<&str, &str> = HashMap::new();
 
-    Template::render("breed", &context)
+    render_template(&tera, "breed", &context)
 }

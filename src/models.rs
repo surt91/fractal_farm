@@ -1,4 +1,6 @@
-use super::schema::fractals;
+use serde::Serialize;
+
+use crate::schema::fractals;
 
 #[derive(Queryable, Serialize, Debug, Clone)]
 pub struct Fractal {
@@ -12,7 +14,7 @@ pub struct Fractal {
     pub rank: Option<i64>
 }
 
-#[derive(Insertable, FromForm, Debug)]
+#[derive(Insertable, Debug)]
 #[diesel(table_name = fractals)]
 pub struct NewFractal {
     pub json: String,

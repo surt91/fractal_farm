@@ -1,20 +1,28 @@
 use std::collections::HashMap;
 
-use rocket::response::Redirect;
-use rocket::request::Form;
-use rocket_contrib::templates::Template;
+use std::sync::Arc;
 
-use super::diesel;
+use axum::extract::{Path, State};
+use axum::http::StatusCode;
+use axum::response::{Html, Redirect};
+use axum::Form;
+use serde::Deserialize;
+
 use diesel::prelude::*;
 
-use super::db::DbConn;
-use super::db_convenience;
+use crate::db::DbConn;
+use crate::db_convenience;
+use crate::{blocking, render_template};
 
-use super::MAX;
+use crate::MAX;
 
-#[get("/rate/<id>/<high>/<low>")]
-pub fn rate(mut conn: DbConn, id: i64, high: i64, low: i64) -> Template {
-    use schema::fractals;
+pub async fn rate(
+    mut conn: DbConn,
+    State(tera): State<Arc<tera::Tera>>,
+    Path((id, high, low)): Path<(i64, i64, i64)>,
+) -> Result<Html<String>, StatusCode> {
+    let pivot_id = blocking(move || {
+    use crate::schema::fractals;
 
     let candidate_rank = fractals::table.select(fractals::rank)
         .find(id)
@@ -35,16 +43,19 @@ pub fn rate(mut conn: DbConn, id: i64, high: i64, low: i64) -> Template {
         .first::<i64>(&mut *conn)
         .expect("the requested rank does not exist");
 
+    pivot_id
+    }).await?;
+
     let mut context: HashMap<&str, i64> = HashMap::new();
     context.insert("agressor", id);
     context.insert("defender", pivot_id);
     context.insert("high", high);
     context.insert("low", low);
 
-    Template::render("generate", &context)
+    render_template(&tera, "generate", &context)
 }
 
-#[derive(FromForm)]
+#[derive(Deserialize)]
 pub struct DuelResult {
     candidate: i64,
     pivot: i64,
@@ -52,9 +63,9 @@ pub struct DuelResult {
     high: i64,
 }
 
-#[post("/below", data = "<result>")]
-pub fn below(mut conn: DbConn, result: Form<DuelResult>) -> Redirect {
-    use schema::fractals;
+pub async fn below(mut conn: DbConn, Form(result): Form<DuelResult>) -> Result<Redirect, StatusCode> {
+    blocking(move || {
+    use crate::schema::fractals;
 
     let pivot = result.pivot;
     let candidate = result.candidate;
@@ -124,13 +135,14 @@ pub fn below(mut conn: DbConn, result: Form<DuelResult>) -> Redirect {
     if high == low {
         Redirect::to("/generate")
     } else {
-        Redirect::to(uri!(rate: candidate, high, low))
+        Redirect::to(&format!("/rate/{}/{}/{}", candidate, high, low))
     }
+    }).await
 }
 
-#[post("/above", data = "<result>")]
-pub fn above(mut conn: DbConn, result: Form<DuelResult>) -> Redirect {
-    use schema::fractals;
+pub async fn above(mut conn: DbConn, Form(result): Form<DuelResult>) -> Result<Redirect, StatusCode> {
+    blocking(move || {
+    use crate::schema::fractals;
 
     let pivot = result.pivot;
     let candidate = result.candidate;
@@ -194,6 +206,7 @@ pub fn above(mut conn: DbConn, result: Form<DuelResult>) -> Redirect {
     if high == low {
         Redirect::to("/generate")
     } else {
-        Redirect::to(uri!(rate: candidate, high, low))
+        Redirect::to(&format!("/rate/{}/{}/{}", candidate, high, low))
     }
+    }).await
 }

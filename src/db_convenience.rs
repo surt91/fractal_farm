@@ -1,14 +1,13 @@
-use super::diesel;
 use diesel::prelude::*;
 
-use super::db::DbConn;
+use crate::db::DbConn;
 
-use super::MAX;
+use crate::MAX;
 
 // will move all entries between min and max by offset ranks
 // you have to make sure that the unique constraint will not be violated
 pub fn offset_rank(conn: &mut DbConn, min: i64, max: i64, offset: i64) {
-    use schema::fractals::dsl::*;
+    use crate::schema::fractals::dsl::*;
 
     let safe = if MAX > MAX + offset { MAX } else { MAX + offset };
 
