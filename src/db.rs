@@ -1,18 +1,14 @@
-// from https://rocket.rs/guide/state/
-
 use std::env;
 
-use super::r2d2;
 use diesel::sqlite::SqliteConnection;
 use diesel::r2d2::ConnectionManager;
 
 use std::ops::{Deref, DerefMut};
-use rocket::http::Status;
-use rocket::request::{self, FromRequest};
-use rocket::{Request, State, Outcome};
+use axum::extract::{FromRef, FromRequestParts};
+use axum::http::{request::Parts, StatusCode};
 
 // An alias to the type for a pool of Diesel SQLite connections.
-type Pool = r2d2::Pool<ConnectionManager<SqliteConnection>>;
+pub type Pool = r2d2::Pool<ConnectionManager<SqliteConnection>>;
 
 /// Initializes a database pool.
 pub fn init_pool() -> Pool {
@@ -23,21 +19,27 @@ pub fn init_pool() -> Pool {
     r2d2::Pool::new(manager).expect("db pool")
 }
 
-// Connection request guard type: a wrapper around an r2d2 pooled connection.
+// Connection extractor: a wrapper around an r2d2 pooled connection.
 pub struct DbConn(pub r2d2::PooledConnection<ConnectionManager<SqliteConnection>>);
 
-/// Attempts to retrieve a single connection from the managed database pool. If
-/// no pool is currently managed, fails with an `InternalServerError` status. If
-/// no connections are available, fails with a `ServiceUnavailable` status.
-impl<'a, 'r> FromRequest<'a, 'r> for DbConn {
-    type Error = ();
+/// Attempts to retrieve a single connection from the database pool in the
+/// application state. If no connections are available, fails with a
+/// `ServiceUnavailable` status.
+impl<S> FromRequestParts<S> for DbConn
+where
+    Pool: FromRef<S>,
+    S: Send + Sync,
+{
+    type Rejection = StatusCode;
 
-    fn from_request(request: &'a Request<'r>) -> request::Outcome<DbConn, ()> {
-        let pool = request.guard::<State<Pool>>()?;
-        match pool.get() {
-            Ok(conn) => Outcome::Success(DbConn(conn)),
-            Err(_) => Outcome::Failure((Status::ServiceUnavailable, ()))
-        }
+    async fn from_request_parts(_parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
+        let pool = Pool::from_ref(state);
+        // r2d2 blocks while waiting for a free connection
+        tokio::task::spawn_blocking(move || pool.get())
+            .await
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+            .map(DbConn)
+            .map_err(|_| StatusCode::SERVICE_UNAVAILABLE)
     }
 }
 

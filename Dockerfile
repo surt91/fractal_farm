@@ -2,7 +2,7 @@ FROM debian:bullseye-slim as builder
 WORKDIR /usr/src/fractal
 RUN apt-get update && apt-get install -y curl gcc libsqlite3-dev && rm -rf /var/lib/apt/lists/*
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs -o rustup.sh
-RUN sh rustup.sh -y --default-toolchain nightly --profile minimal
+RUN sh rustup.sh -y --default-toolchain stable --profile minimal
 RUN $HOME/.cargo/bin/cargo install diesel_cli --no-default-features --features sqlite
 COPY . .
 RUN $HOME/.cargo/bin/cargo build --release

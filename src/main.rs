@@ -1,47 +1,95 @@
-// for rocket
-#![feature(proc_macro_hygiene, decl_macro)]
-
 use std::collections::HashMap;
 
 use std::fs;
-extern crate time;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
+use std::sync::Arc;
 
-extern crate rand;
-extern crate sha2;
-
-extern crate dotenv;
 use dotenv::dotenv;
 
-extern crate a_fractal_a_day;
 use a_fractal_a_day as fractal;
 
-#[macro_use] extern crate rocket;
-use rocket::response::{NamedFile, Redirect, content};
+use axum::Router;
+use axum::extract::{DefaultBodyLimit, FromRef, Path, State};
+use axum::http::{header, StatusCode};
+use axum::response::{Html, IntoResponse, Redirect, Response};
+use axum::routing::{get, post};
+use axum::Json;
+use tower_http::services::ServeDir;
 
 #[macro_use] extern crate diesel;
 use diesel::prelude::*;
-extern crate r2d2;
-#[macro_use] extern crate serde_derive;
-
-extern crate serde;
-extern crate serde_json;
+use serde::Serialize;
 
 mod db;
-
-extern crate rocket_contrib;
-use rocket_contrib::{json::Json,templates::Template};
 
 mod db_convenience;
 pub mod schema;
 pub mod models;
 
-use db::DbConn;
+use db::{DbConn, Pool};
 
 mod rating;
 mod genetic;
 
 const MAX: i64 = 100;
+
+#[derive(Clone)]
+pub struct AppState {
+    pool: Pool,
+    tera: Arc<tera::Tera>,
+}
+
+impl FromRef<AppState> for Pool {
+    fn from_ref(state: &AppState) -> Pool {
+        state.pool.clone()
+    }
+}
+
+impl FromRef<AppState> for Arc<tera::Tera> {
+    fn from_ref(state: &AppState) -> Arc<tera::Tera> {
+        state.tera.clone()
+    }
+}
+
+/// Runs blocking work (database, rendering fractals) outside of the async
+/// runtime. A panic inside is answered with `InternalServerError`.
+pub async fn blocking<F, T>(f: F) -> Result<T, StatusCode>
+where
+    F: FnOnce() -> T + Send + 'static,
+    T: Send + 'static,
+{
+    tokio::task::spawn_blocking(f)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
+}
+
+/// Renders `templates/<name>.html.tera`.
+pub fn render_template<C: Serialize>(tera: &tera::Tera, name: &str, context: &C) -> Result<Html<String>, StatusCode> {
+    tera::Context::from_serialize(context)
+        .and_then(|ctx| tera.render(name, &ctx))
+        .map(Html)
+        .map_err(|e| {
+            eprintln!("rendering template {} failed: {:?}", name, e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })
+}
+
+/// Loads all `templates/*.html.tera` under their name without extension,
+/// e.g. `base`, so that `{% extends "base" %}` keeps working.
+fn init_templates() -> tera::Tera {
+    let files: Vec<(PathBuf, Option<String>)> = fs::read_dir("templates")
+        .expect("templates directory")
+        .filter_map(|entry| {
+            let path = entry.ok()?.path();
+            let name = path.file_name()?.to_str()?.strip_suffix(".html.tera")?.to_owned();
+            Some((path, Some(name)))
+        })
+        .collect();
+
+    let mut tera = tera::Tera::default();
+    tera.add_template_files(files).expect("templates");
+    tera
+}
 
 fn sha2(input: &str) -> String {
     use sha2::{Sha256, Digest};
@@ -97,6 +145,11 @@ fn json2draft(json: &str, dim: (u32, u32)) -> PathBuf {
     fractal::fractal::render_draft(&mut fractal, path.to_str().unwrap(), &dim);
 
     path
+}
+
+// the rendered pngs are served by the `/fractals` file service
+fn png_url(path: &std::path::Path) -> String {
+    format!("/fractals/{}", path.file_name().unwrap().to_str().unwrap())
 }
 
 fn generate_fractal(seed: usize, name: Option<fractal::FractalType>) -> fractal::fractal::Fractal {
@@ -190,88 +243,91 @@ fn cleanup_db(conn: &mut DbConn) {
     .expect("Error cleaning up");
 }
 
-#[get("/")]
-fn index() -> Redirect {
-    Redirect::to(uri!(generate))
+async fn index() -> Redirect {
+    Redirect::to("/generate")
 }
 
-#[get("/generate")]
-fn generate() -> Redirect {
-    Redirect::to(uri!(generate_specific: "random"))
+async fn generate() -> Redirect {
+    Redirect::to("/generate/random")
 }
 
-#[get("/generate/<name>")]
-fn generate_specific(mut conn: DbConn, name: Option<String>) -> Redirect {
-    let seed = time::OffsetDateTime::now_utc().unix_timestamp_nanos() as usize;
+async fn generate_specific(mut conn: DbConn, Path(name): Path<String>) -> Result<Redirect, StatusCode> {
+    blocking(move || {
+        let seed = time::OffsetDateTime::now_utc().unix_timestamp_nanos() as usize;
 
-    let fractal_type = match name.as_ref().map(|s| s.as_str()) {
-        Some("newton") => Some(fractal::FractalType::Newton),
-        Some("mobius") => Some(fractal::FractalType::MobiusFlame),
-        Some("flame") => Some(fractal::FractalType::FractalFlame),
-        Some("qmap") => Some(fractal::FractalType::QuadraticMap),
-        Some("lsys") => Some(fractal::FractalType::RandomLSystem),
-        Some("mandelbrot") => Some(fractal::FractalType::Mandelbrot),
-        None | Some(_) => None
-    };
+        let fractal_type = match name.as_str() {
+            "newton" => Some(fractal::FractalType::Newton),
+            "mobius" => Some(fractal::FractalType::MobiusFlame),
+            "flame" => Some(fractal::FractalType::FractalFlame),
+            "qmap" => Some(fractal::FractalType::QuadraticMap),
+            "lsys" => Some(fractal::FractalType::RandomLSystem),
+            "mandelbrot" => Some(fractal::FractalType::Mandelbrot),
+            _ => None
+        };
 
-    let f = generate_fractal(seed, fractal_type);
-    let json = f.json();
+        let f = generate_fractal(seed, fractal_type);
+        let json = f.json();
 
-    let (new_id, high, low) = add_fractal_to_db(&mut conn, &json);
+        let (new_id, high, low) = add_fractal_to_db(&mut conn, &json);
 
-    Redirect::to(uri!(rating::rate: new_id, high, low))
+        Redirect::to(&format!("/rate/{}/{}/{}", new_id, high, low))
+    }).await
 }
 
-#[get("/list")]
-fn list(mut conn: DbConn) -> QueryResult<Json<Vec<models::Fractal>>> {
-    use schema::fractals::dsl::*;
-    use schema::fractals;
-    use models::Fractal;
+async fn list(mut conn: DbConn) -> Result<Json<Vec<models::Fractal>>, StatusCode> {
+    blocking(move || {
+        use schema::fractals::dsl::*;
+        use schema::fractals;
+        use models::Fractal;
 
-    fractals.order(fractals::id.desc())
-        .load::<Fractal>(&mut *conn)
-        .map(|x| Json(x))
+        fractals.order(fractals::id.desc())
+            .load::<Fractal>(&mut *conn)
+            .map(|x| Json(x))
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
+    }).await?
 }
 
-#[get("/render/<id>/<width>/<height>")]
-fn render(mut conn: DbConn, id: i64, width: u32, height: u32) -> Redirect {
-    use models::Fractal;
-    use schema::fractals;
+async fn render(mut conn: DbConn, Path((id, width, height)): Path<(i64, u32, u32)>) -> Result<Redirect, StatusCode> {
+    blocking(move || {
+        use models::Fractal;
+        use schema::fractals;
 
-    let f: Fractal = fractals::table.find(id)
-        .first::<Fractal>(&mut *conn)
-        .unwrap();
+        let f: Fractal = fractals::table.find(id)
+            .first::<Fractal>(&mut *conn)
+            .unwrap();
 
-    let dim = (width, height);
-    let path = json2png(&f.json, dim);
-    let path = path.to_str().unwrap();
-    Redirect::to(uri!(files: path))
+        let dim = (width, height);
+        let path = json2png(&f.json, dim);
+        Redirect::to(&png_url(&path))
+    }).await
 }
 
-#[get("/draft/<id>/<width>/<height>")]
-fn draft(mut conn: DbConn, id: i64, width: u32, height: u32) -> Redirect {
-    use models::Fractal;
-    use schema::fractals;
+async fn draft(mut conn: DbConn, Path((id, width, height)): Path<(i64, u32, u32)>) -> Result<Redirect, StatusCode> {
+    blocking(move || {
+        use models::Fractal;
+        use schema::fractals;
 
-    let f: Fractal = fractals::table.find(id)
-        .first::<Fractal>(&mut *conn)
-        .unwrap();
+        let f: Fractal = fractals::table.find(id)
+            .first::<Fractal>(&mut *conn)
+            .unwrap();
 
-    let dim = (width, height);
-    let path = json2draft(&f.json, dim);
-    let path = path.to_str().unwrap();
-    Redirect::to(uri!(files: path))
+        let dim = (width, height);
+        let path = json2draft(&f.json, dim);
+        Redirect::to(&png_url(&path))
+    }).await
 }
 
-#[get("/json/<id>")]
-fn json(mut conn: DbConn, id: i64) -> Option<content::Json<String>> {
-    use schema::fractals;
+async fn json(mut conn: DbConn, Path(id): Path<i64>) -> Result<Response, StatusCode> {
+    blocking(move || {
+        use schema::fractals;
 
-    fractals::table.select(fractals::json)
-        .find(id)
-        .first::<String>(&mut *conn)
-        .ok()
-        .and_then(|x| Some(content::Json(x)))
+        fractals::table.select(fractals::json)
+            .find(id)
+            .first::<String>(&mut *conn)
+            .ok()
+            .map(|x| ([(header::CONTENT_TYPE, "application/json")], x).into_response())
+            .ok_or(StatusCode::NOT_FOUND)
+    }).await?
 }
 
 #[derive(Serialize)]
@@ -281,173 +337,159 @@ pub struct SubmitDetails {
     pub high: i64,
 }
 
-struct JsonFractal {
-    data: String
+const LIMIT: usize = 1024*1024*5;
+
+async fn submit_json(mut conn: DbConn, data: String) -> Result<Json<SubmitDetails>, StatusCode> {
+    blocking(move || {
+        let (id, high, low) = add_fractal_to_db(&mut conn, &data);
+        Json(
+            SubmitDetails {
+                id,
+                low,
+                high
+            }
+        )
+    }).await
 }
 
-// https://api.rocket.rs/v0.4/rocket/data/trait.FromDataSimple.html
-use std::io::Read;
-use rocket::{Request, Data, Outcome::*};
-use rocket::data::{self, FromDataSimple};
-use rocket::http::Status;
-const LIMIT: u64 = 1024*1024*5;
-impl FromDataSimple for JsonFractal {
-    type Error = String;
-
-    fn from_data(_req: &Request, data: Data) -> data::Outcome<Self, String> {
-        // Read the data into a String.
-        let mut string = String::new();
-        if let Err(e) = data.open().take(LIMIT).read_to_string(&mut string) {
-            return Failure((Status::InternalServerError, format!("{:?}", e)));
-        }
-        Success(JsonFractal { data: string })
-    }
-}
-
-#[post("/submitJson", data = "<json>")]
-fn submit_json(mut conn: DbConn, json: JsonFractal) -> Json<SubmitDetails> {
-    let (id, high, low) = add_fractal_to_db(&mut conn, &json.data);
-    Json(
-        SubmitDetails {
-            id,
-            low,
-            high
-        }
-    )
-}
-#[get("/submitJson")]
-fn upload_json() -> Template {
+async fn upload_json(State(tera): State<Arc<tera::Tera>>) -> Result<Html<String>, StatusCode> {
     let context: HashMap<&str, &str> = HashMap::new();
 
-    Template::render("uploadJson", &context)
+    render_template(&tera, "uploadJson", &context)
 }
 
-#[get("/consume")]
-fn consume(mut conn: DbConn) -> String {
-    use models::Fractal;
-    use schema::fractals::dsl::*;
+async fn consume(mut conn: DbConn) -> Result<String, StatusCode> {
+    blocking(move || {
+        use models::Fractal;
+        use schema::fractals::dsl::*;
 
-    // before we consume: clean up the database
-    // this is a good place, since it will be called regulary
-    cleanup_db(&mut conn);
+        // before we consume: clean up the database
+        // this is a good place, since it will be called regulary
+        cleanup_db(&mut conn);
 
-    let f: Fractal = fractals
-        .filter(rank.gt(0))
-        .filter(consumed.eq(false))
-        .order(rank.asc())
-        .first::<Fractal>(&mut *conn)
-        .unwrap();
-    // FIXME: if all fractals are consumed: handel the error
+        let f: Fractal = fractals
+            .filter(rank.gt(0))
+            .filter(consumed.eq(false))
+            .order(rank.asc())
+            .first::<Fractal>(&mut *conn)
+            .unwrap();
+        // FIXME: if all fractals are consumed: handel the error
 
-    diesel::update(fractals.find(f.id))
-        .set((
-            consumed.eq(true),
-            consumed_time.eq(time::OffsetDateTime::now_utc().unix_timestamp()),
-            rank.eq::<Option<i64>>(None),
-        ))
-        .execute(&mut *conn)
-        .expect("Error saving new entry");
+        diesel::update(fractals.find(f.id))
+            .set((
+                consumed.eq(true),
+                consumed_time.eq(time::OffsetDateTime::now_utc().unix_timestamp()),
+                rank.eq::<Option<i64>>(None),
+            ))
+            .execute(&mut *conn)
+            .expect("Error saving new entry");
 
 
-    let max_rank = fractals.select(diesel::dsl::max(rank))
-        .first::<Option<i64>>(&mut *conn)
-        .unwrap()
-        .unwrap_or(1);
+        let max_rank = fractals.select(diesel::dsl::max(rank))
+            .first::<Option<i64>>(&mut *conn)
+            .unwrap()
+            .unwrap_or(1);
 
-    db_convenience::offset_rank(&mut conn, 2, max_rank, -1);
+        db_convenience::offset_rank(&mut conn, 2, max_rank, -1);
 
-    f.json
+        f.json
+    }).await
 }
 
-#[get("/top")]
-fn top(mut conn: DbConn) -> Template {
-    use schema::fractals;
-    use models::Fractal;
-    use schema::fractals::dsl::*;
+async fn top(mut conn: DbConn, State(tera): State<Arc<tera::Tera>>) -> Result<Html<String>, StatusCode> {
+    let pngs = blocking(move || {
+        use schema::fractals;
+        use models::Fractal;
+        use schema::fractals::dsl::*;
 
-    let pngs: Vec<Fractal> = fractals.order(fractals::rank.asc())
-        .filter(rank.gt(0))
-        .filter(consumed.eq(false))
-        .filter(deleted.eq(false))
-        .limit(MAX)
-        .load::<Fractal>(&mut *conn)
-        .unwrap();
+        fractals.order(fractals::rank.asc())
+            .filter(rank.gt(0))
+            .filter(consumed.eq(false))
+            .filter(deleted.eq(false))
+            .limit(MAX)
+            .load::<Fractal>(&mut *conn)
+            .unwrap()
+    }).await?;
 
-    let mut context: HashMap<&str, &Vec<Fractal>> = HashMap::new();
+    let mut context: HashMap<&str, &Vec<models::Fractal>> = HashMap::new();
     context.insert("pngs", &pngs);
 
-    Template::render("top", &context)
+    render_template(&tera, "top", &context)
 }
 
-#[get("/archive")]
-fn archive(mut conn: DbConn) -> Template {
-    use schema::fractals;
-    use models::Fractal;
-    use schema::fractals::dsl::*;
+async fn archive(mut conn: DbConn, State(tera): State<Arc<tera::Tera>>) -> Result<Html<String>, StatusCode> {
+    let pngs = blocking(move || {
+        use schema::fractals;
+        use models::Fractal;
+        use schema::fractals::dsl::*;
 
-    let pngs: Vec<Fractal> = fractals.order(fractals::consumed_time.desc())
-        .filter(consumed.eq(true))
-        .filter(deleted.eq(false))
-        .load::<Fractal>(&mut *conn)
-        .unwrap();
+        fractals.order(fractals::consumed_time.desc())
+            .filter(consumed.eq(true))
+            .filter(deleted.eq(false))
+            .load::<Fractal>(&mut *conn)
+            .unwrap()
+    }).await?;
 
-    let mut context: HashMap<&str, &Vec<Fractal>> = HashMap::new();
+    let mut context: HashMap<&str, &Vec<models::Fractal>> = HashMap::new();
     context.insert("pngs", &pngs);
 
-    Template::render("top", &context)
+    render_template(&tera, "top", &context)
 }
 
-#[get("/trash")]
-fn trash(mut conn: DbConn) -> Template {
-    use schema::fractals;
-    use models::Fractal;
-    use schema::fractals::dsl::*;
+async fn trash(mut conn: DbConn, State(tera): State<Arc<tera::Tera>>) -> Result<Html<String>, StatusCode> {
+    let pngs = blocking(move || {
+        use schema::fractals;
+        use models::Fractal;
+        use schema::fractals::dsl::*;
 
-    let pngs: Vec<Fractal> = fractals.order(fractals::deleted_time.desc())
-        .filter(consumed.eq(false))
-        .filter(deleted.eq(true))
-        .load::<Fractal>(&mut *conn)
-        .unwrap();
+        fractals.order(fractals::deleted_time.desc())
+            .filter(consumed.eq(false))
+            .filter(deleted.eq(true))
+            .load::<Fractal>(&mut *conn)
+            .unwrap()
+    }).await?;
 
-    let mut context: HashMap<&str, &Vec<Fractal>> = HashMap::new();
+    let mut context: HashMap<&str, &Vec<models::Fractal>> = HashMap::new();
     context.insert("pngs", &pngs);
 
-    Template::render("top", &context)
+    render_template(&tera, "top", &context)
 }
 
-#[get("/delete/<id_in>")]
-fn delete(mut conn: DbConn, id_in: i64) -> Redirect {
-    use schema::fractals::dsl::*;
+async fn delete(mut conn: DbConn, Path(id_in): Path<i64>) -> Result<Redirect, StatusCode> {
+    blocking(move || {
+        use schema::fractals::dsl::*;
 
-    let rank_in = fractals.select(rank)
-        .find(id_in)
-        .first::<Option<i64>>(&mut *conn)
-        .expect("Can not find the rank")
-        .expect("rank is None");
+        let rank_in = fractals.select(rank)
+            .find(id_in)
+            .first::<Option<i64>>(&mut *conn)
+            .expect("Can not find the rank")
+            .expect("rank is None");
 
-    diesel::update(fractals.find(id_in))
-        .set((
-            deleted.eq(true),
-            deleted_time.eq(time::OffsetDateTime::now_utc().unix_timestamp()),
-            rank.eq::<Option<i64>>(None),
-        ))
-        .execute(&mut *conn)
-        .expect("Error deleting entry");
+        diesel::update(fractals.find(id_in))
+            .set((
+                deleted.eq(true),
+                deleted_time.eq(time::OffsetDateTime::now_utc().unix_timestamp()),
+                rank.eq::<Option<i64>>(None),
+            ))
+            .execute(&mut *conn)
+            .expect("Error deleting entry");
 
-    println!("deleted rank {}", rank_in);
-    db_convenience::offset_rank(&mut conn, rank_in, MAX, -1);
+        println!("deleted rank {}", rank_in);
+        db_convenience::offset_rank(&mut conn, rank_in, MAX, -1);
 
-    Redirect::to(uri!(top))
+        Redirect::to("/top")
+    }).await
 }
 
-#[get("/editor/<id>")]
-fn editor(mut conn: DbConn, id: i64) -> Option<Template> {
-    use schema::fractals;
+async fn editor(mut conn: DbConn, State(tera): State<Arc<tera::Tera>>, Path(id): Path<i64>) -> Result<Html<String>, StatusCode> {
+    let json = blocking(move || {
+        use schema::fractals;
 
-    let json = fractals::table.select(fractals::json)
-        .find(id)
-        .first::<String>(&mut *conn)
-        .ok();
+        fractals::table.select(fractals::json)
+            .find(id)
+            .first::<String>(&mut *conn)
+            .ok()
+    }).await?;
 
     let id_str = format!("{}", id);
 
@@ -457,48 +499,51 @@ fn editor(mut conn: DbConn, id: i64) -> Option<Template> {
             context.insert("json", &j);
             context.insert("id", &id_str);
 
-            Some(Template::render("editor", &context))
+            render_template(&tera, "editor", &context)
         }
-        None => None
+        None => Err(StatusCode::NOT_FOUND)
     }
 }
 
-#[get("/<file..>", rank = 2)]
-fn files(file: PathBuf) -> Option<NamedFile> {
-    NamedFile::open(Path::new(".").join(file)).ok()
-}
-
-fn main() {
+#[tokio::main]
+async fn main() {
     dotenv().ok();
 
-    rocket::ignite()
-           .manage(db::init_pool())
-           .mount("/",
-                routes![
-                    index,
-                    files,
-                    list,
-                    top,
-                    archive,
-                    trash,
-                    render,
-                    draft,
-                    json,
-                    consume,
-                    generate,
-                    generate_specific,
-                    delete,
-                    rating::rate,
-                    rating::above,
-                    rating::below,
-                    editor,
-                    submit_json,
-                    upload_json,
-                    genetic::combine,
-                    genetic::random,
-                    genetic::breed,
-                ]
-            )
-           .attach(Template::fairing())
-           .launch();
+    let state = AppState {
+        pool: db::init_pool(),
+        tera: Arc::new(init_templates()),
+    };
+
+    let app = Router::new()
+        .route("/", get(index))
+        .route("/list", get(list))
+        .route("/top", get(top))
+        .route("/archive", get(archive))
+        .route("/trash", get(trash))
+        .route("/render/{id}/{width}/{height}", get(render))
+        .route("/draft/{id}/{width}/{height}", get(draft))
+        .route("/json/{id}", get(json))
+        .route("/consume", get(consume))
+        .route("/generate", get(generate))
+        .route("/generate/{name}", get(generate_specific))
+        .route("/delete/{id}", get(delete))
+        .route("/rate/{id}/{high}/{low}", get(rating::rate))
+        .route("/above", post(rating::above))
+        .route("/below", post(rating::below))
+        .route("/editor/{id}", get(editor))
+        .route("/submitJson", get(upload_json).post(submit_json))
+        .route("/combine/{id1}/{id2}", get(genetic::combine))
+        .route("/random", get(genetic::random))
+        .route("/breed", get(genetic::breed))
+        .nest_service("/static", ServeDir::new("static"))
+        .nest_service("/fractals", ServeDir::new("fractals"))
+        .layer(DefaultBodyLimit::max(LIMIT))
+        .with_state(state);
+
+    let listener = tokio::net::TcpListener::bind("0.0.0.0:7878")
+        .await
+        .expect("bind 0.0.0.0:7878");
+    axum::serve(listener, app)
+        .await
+        .expect("server error");
 }
